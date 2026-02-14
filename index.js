@@ -559,7 +559,7 @@ client.on("messageCreate", async message => {
             role: "user",
             content: prompt
           }
-        ]
+      
       })
     });
     
