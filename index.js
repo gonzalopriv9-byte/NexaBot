@@ -698,6 +698,61 @@ client.on("guildMemberAdd", async member => {
   }
 });
 
+
+// ==================== COMANDO DESRECLAMAR ====================
+// Aquí se registra cuando se cargan los comandos con loadCommands
+
+// Pero también necesita un handler aquí en interactionCreate:
+if (interaction.isChatInputCommand() && interaction.commandName === 'desreclamar') {
+  const channel = interaction.channel;
+  
+  if (!channel.name.startsWith('ticket-')) {
+    return interaction.reply({
+      content: '❌ Este comando solo funciona en canales de tickets.',
+      flags: 64
+    });
+  }
+
+  const staffRoleId = '1469344936620195872';
+  if (!interaction.member.roles.cache.has(staffRoleId)) {
+    return interaction.reply({
+      content: '❌ Solo el staff puede desreclamar tickets.',
+      flags: 64
+    });
+  }
+
+  try {
+    // Restaurar permisos para todos los staff
+    await channel.permissionOverwrites.edit(staffRoleId, {
+      ViewChannel: true,
+      SendMessages: true
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor('#FFA500')
+      .setTitle('🔓 Ticket Liberado')
+      .setDescription(`${interaction.user} ha liberado este ticket.\n\nCualquier staff puede reclamarlo ahora.`)
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    
+    await interaction.reply({
+      content: '✅ Ticket liberado correctamente.',
+      flags: 64
+    });
+
+    addLog('info', `Ticket ${channel.name} liberado por ${interaction.user.tag}`);
+    
+  } catch (error) {
+    addLog('error', `Error desreclamar: ${error.message}`);
+    await interaction.reply({
+      content: '❌ Error al liberar el ticket.',
+      flags: 64
+    });
+  }
+  return;
+}
+
 // ==================== LOGIN DISCORD ====================
 if (botEnabled) {
   client.login(TOKEN)
