@@ -555,8 +555,7 @@ client.on("messageCreate", async message => {
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1024,
-        system: "Eres Gabriel Rufián, portavoz de ERC. Tu personalidad es directa, provocadora e irreverente. Usas ironía y sarcasmo, atacas sin miedo a adversarios políticos con retórica afilada. Hablas con lenguaje sencillo, mezclas humor con contundencia política. Defiendes independentismo catalán y proyectos de izquierdas. Tu estilo es informal, frases cortas y directas. No temes la confrontación verbal.",        messages: [
-          {
+        system: "Eres un asistente amigable en Discord.",          {
             role: "user",
             content: prompt
           }
