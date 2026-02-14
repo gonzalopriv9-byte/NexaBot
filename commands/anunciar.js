@@ -9,10 +9,15 @@ module.exports = {
         .setDescription('Texto del anuncio')
         .setRequired(true)
     )
+    .addBooleanOption(option =>
+      option.setName('mostrar_enviante')
+        .setDescription('¿Mostrar quién envió el anuncio?')
+        .setRequired(true)
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
-    // Verificar roles permitidos (además del permiso de admin)
+    // Verificar roles permitidos
     const allowedRoles = ["1469344936620195872"];
     const hasPermission = allowedRoles.some(roleId => 
       interaction.member.roles.cache.has(roleId)
@@ -25,15 +30,25 @@ module.exports = {
       });
     }
 
+    // Responder PRIMERO (esto previene duplicados)
+    await interaction.deferReply({ ephemeral: true });
+
     const msg = interaction.options.getString('mensaje');
+    const mostrarEnviante = interaction.options.getBoolean('mostrar_enviante');
+    
+    // Construir el mensaje del anuncio
+    let anuncioTexto = `📢 **ANUNCIO**\n\n${msg}`;
+    
+    if (mostrarEnviante) {
+      anuncioTexto += `\n\n*Enviado por: ${interaction.user}*`;
+    }
     
     // Enviar el anuncio
-    await interaction.channel.send(`📢 **ANUNCIO**\n\n${msg}`);
+    await interaction.channel.send(anuncioTexto);
     
     // Confirmar al usuario
-    await interaction.reply({ 
-      content: '✅ Anuncio enviado correctamente', 
-      ephemeral: true 
+    await interaction.editReply({ 
+      content: '✅ Anuncio enviado correctamente'
     });
   }
 };
