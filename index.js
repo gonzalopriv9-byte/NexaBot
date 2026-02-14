@@ -256,6 +256,69 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
+    // ==================== MODAL: CREAR DNI ====================
+if (interaction.isModalSubmit() && interaction.customId === "dni_modal") {
+  await interaction.deferReply({ ephemeral: true });
+
+  const { saveDNI, generateDNINumber } = require("./utils/database");
+
+  const nombreCompleto = interaction.fields.getTextInputValue("nombre_completo");
+  const fechaNacimiento = interaction.fields.getTextInputValue("fecha_nacimiento");
+  const nacionalidad = interaction.fields.getTextInputValue("nacionalidad");
+  const direccion = interaction.fields.getTextInputValue("direccion");
+  const telefono = interaction.fields.getTextInputValue("telefono");
+
+  // Validar formato de fecha
+  const fechaRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+  if (!fechaRegex.test(fechaNacimiento)) {
+    return interaction.editReply({
+      content: "❌ Formato de fecha inválido. Usa DD/MM/AAAA (ejemplo: 15/03/1995)"
+    });
+  }
+
+  // Generar número de DNI único
+  const numeroDNI = generateDNINumber();
+
+  const dniData = {
+    numeroDNI,
+    nombreCompleto,
+    fechaNacimiento,
+    nacionalidad,
+    direccion,
+    telefono,
+    userId: interaction.user.id,
+    username: interaction.user.username
+  };
+
+  const success = saveDNI(interaction.user.id, dniData);
+
+  if (success) {
+    const { EmbedBuilder } = require("discord.js");
+    
+    const embed = new EmbedBuilder()
+      .setColor("#00FF00")
+      .setTitle("✅ DNI Creado Exitosamente")
+      .setDescription(`Tu DNI ha sido registrado en la base de datos.`)
+      .addFields(
+        { name: "📝 Número DNI", value: `\`${numeroDNI}\``, inline: true },
+        { name: "👤 Nombre", value: nombreCompleto, inline: true }
+      )
+      .setFooter({ text: "Usa /verdni para ver tu DNI completo" })
+      .setTimestamp();
+
+    await interaction.editReply({
+      embeds: [embed]
+    });
+
+    addLog('success', `DNI creado para ${interaction.user.tag}: ${numeroDNI}`);
+  } else {
+    await interaction.editReply({
+      content: "❌ Error al guardar el DNI. Intenta de nuevo."
+    });
+  }
+  return;
+}
+
     // ==================== BOTÓN: RECLAMAR TICKET ====================
     if (interaction.isButton() && interaction.customId === "claim_ticket") {
       const hasStaffRole = STAFF_ROLES.some(roleId => 
