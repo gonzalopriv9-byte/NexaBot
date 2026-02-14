@@ -16,6 +16,7 @@ const {
 const express = require("express");
 const { loadCommands } = require("./handlers/commandHandler");
 const sgMail = require("@sendgrid/mail");
+const fetch = require("node-fetch");
 
 // ==================== DEBUGGING ====================
 console.log('🔍 TOKEN detectado:', process.env.DISCORD_TOKEN ? 'SÍ (primeros 10 chars: ' + process.env.DISCORD_TOKEN.substring(0, 10) + ')' : 'NO');
@@ -192,7 +193,7 @@ client.on("interactionCreate", async interaction => {
           name: `ticket-${interaction.user.username}`,
           type: ChannelType.GuildText,
           parent: TICKET_CATEGORY_ID,
-          topic: interaction.user.id, // Guardar ID del creador en topic
+          topic: interaction.user.id,
           permissionOverwrites: [
             {
               id: guild.id,
@@ -332,9 +333,8 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
-    // ==================== BOTÓN: CERRAR TICKET CON VALORACIÓN ====================
+    // ==================== BOTÓN: CERRAR TICKET ====================
     if (interaction.isButton() && interaction.customId === 'close_ticket') {
-      
       const channel = interaction.channel;
       const ticketOwnerId = channel.topic;
       const staffRoleId = '1469344936620195872';
@@ -342,7 +342,7 @@ client.on("interactionCreate", async interaction => {
       if (interaction.user.id !== ticketOwnerId && !interaction.member.roles.cache.has(staffRoleId)) {
         return interaction.reply({
           content: '❌ Solo el creador del ticket o el staff puede cerrarlo.',
-          flags: 64
+          ephemeral: true
         });
       }
 
@@ -368,25 +368,24 @@ client.on("interactionCreate", async interaction => {
         .setMinLength(10)
         .setMaxLength(1000);
 
-      const firstRow = new ActionRowBuilder().addComponents(starsInput);
-      const secondRow = new ActionRowBuilder().addComponents(reasonInput);
-      
-      modal.addComponents(firstRow, secondRow);
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(starsInput),
+        new ActionRowBuilder().addComponents(reasonInput)
+      );
 
       await interaction.showModal(modal);
       return;
     }
 
-    // ==================== MODAL: PROCESAR VALORACIÓN ====================
+    // ==================== MODAL: VALORACIÓN ====================
     if (interaction.isModalSubmit() && interaction.customId === 'ticket_rating_modal') {
-      
       const stars = interaction.fields.getTextInputValue('rating_stars');
       const reason = interaction.fields.getTextInputValue('rating_reason');
 
       if (!/^[1-5]$/.test(stars)) {
         return interaction.reply({
           content: '❌ Las estrellas deben ser un número entre 1 y 5.',
-          flags: 64
+          ephemeral: true
         });
       }
 
@@ -407,19 +406,18 @@ client.on("interactionCreate", async interaction => {
 
         const staffName = staffMember ? staffMember.tag : 'No asignado';
 
-     const ratingEmbed = new EmbedBuilder()
-  .setColor(stars >= 4 ? '#00FF00' : stars >= 3 ? '#FFA500' : '#FF0000')
-  .setTitle('⭐ Valoración del Ticket')
-  .addFields(
-    { name: '👤 Usuario', value: `${interaction.user}`, inline: true },
-    { name: '🛡️ Staff', value: staffName, inline: true },
-    { name: '⭐ Estrellas', value: '⭐'.repeat(parseInt(stars)), inline: false },
-    { name: '💬 Comentario', value: reason, inline: false },
-    { name: '🎫 Ticket', value: channel.name, inline: true },
-    { name: '📅 Fecha', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
-  )
-  .setTimestamp();
-
+        const ratingEmbed = new EmbedBuilder()
+          .setColor(stars >= 4 ? '#00FF00' : stars >= 3 ? '#FFA500' : '#FF0000')
+          .setTitle('⭐ Valoración del Ticket')
+          .addFields(
+            { name: '👤 Usuario', value: `${interaction.user}`, inline: true },
+            { name: '🛡️ Staff', value: staffName, inline: true },
+            { name: '⭐ Estrellas', value: '⭐'.repeat(parseInt(stars)), inline: false },
+            { name: '💬 Comentario', value: reason, inline: false },
+            { name: '🎫 Ticket', value: channel.name, inline: true },
+            { name: '📅 Fecha', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
+          )
+          .setTimestamp();
 
         const ratingsChannel = interaction.guild.channels.cache.get(RATINGS_CHANNEL_ID);
         
@@ -464,7 +462,7 @@ client.on("interactionCreate", async interaction => {
         addLog('error', `Error al procesar valoración: ${error.message}`);
         await interaction.reply({
           content: '❌ Error al procesar la valoración.',
-          flags: 64
+          ephemeral: true
         });
       }
       return;
@@ -523,120 +521,105 @@ client.on("interactionCreate", async interaction => {
   }
 });
 
-// ==================== MENCIONES CON IA ====================
+// ==================== MANEJADOR DE MENSAJES (IA + VERIFICACIÓN) ====================
 client.on("messageCreate", async message => {
-  // Ignorar bots y mensajes sin menciones
+  // Ignorar bots
   if (message.author.bot) return;
-  
-  // Verificar si el bot fue mencionado
-  if (!message.mentions.has(client.user.id)) return;
-  
-  try {
-    // Extraer el texto después de la mención
-    const prompt = message.content
-      .replace(/<@!?\d+>/g, '') // Eliminar menciones
-      .trim();
-    
-    if (!prompt) {
-      return message.reply("❓ Mencióname con una pregunta. Ejemplo: `@Bot ¿Qué es Discord?`");
-    }
-    
-    // Mostrar que está escribiendo
-    await message.channel.sendTyping();
-    
-   // Llamar a la API de Groq
-const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
-  },
-  body: JSON.stringify({
-    model: "llama-3.3-70b-versatile",
-    messages: [
-      {
-        role: "system",
-        content:"Eres Gabriel Rufián Romero,portavoz de Esquerra Republicana de Catalunya (ERC) en el Congreso de los Diputados español. Naciste en Santa Coloma de Gramenet (Barcelona) en 1982, en una familia de clase trabajadora. Tu padre era mecánico y tú trabajaste en un taller de pájaros antes de dedicarte a la política. Estudiaste Filología Hispánica y tienes formación en comunicación, lo que se nota en tu retórica.Tu personalidad es:Directa, provocadora e irreverente: No tienes pelos en la lengua. Dices las cosas sin filtros y usas la confrontación verbal como arma política principal. Atacas sin miedo a tus adversarios con ironía mordaz y sarcasmo constante.Irónico y con sentido del humor: Mezclas humor con contundencia política. Haces bromas, usas memes y referencias a la cultura popular (series, películas, videojuegos, redes sociales) para hacer tus mensajes más virales y accesibles.Lenguaje sencillo y popular: Evitas tecnicismos innecesarios. Hablas como habla la gente de la calle, usando expresiones coloquiales y directas. Prefieres frases cortas e impactantes.Muy ambicioso y con alta autoestima: Quieres destacar, que se hable de ti, ser el centro de atención. Eres muy sensible a las críticas sobre tu imagen personal y no toleras que te llamen falso o hipócrita. Tu imagen es sagrada para ti.Populista estratégico: Tienes muy claro cuál es tu público (izquierda e independentismo catalán) y poco te importa lo que piense el resto. Conectas emocionalmente con la gente usando el sentido común y tocando temas que les afectan directamente.Crítico con el poder y el establishment: Atacas duramente la corrupción política, los privilegios de la monarquía, el poder de las grandes fortunas, la Iglesia y las élites. También criticas el poder de los algoritmos y cómo las redes sociales manipulan a la gente con dopamina digital.Tu ideología:Independentista catalán convencido: Defiendes el derecho de autodeterminación de Catalunya y criticas duramente al Estado español por su represión. Hablas del 1 de octubre, los presos políticos y la falta de diálogo.De izquierdas social y económica: Defiendes políticas sociales, derechos laborales, servicios públicos, sanidad y educación gratuitas. Críticas al neoliberalismo y las políticas de austeridad.Pragmático pero coherente: Aunque eres radical en el discurso, entiendes la necesidad de pactos y estrategias políticas para avanzar. Defiendes proyectos de unidad de izquierdas a nivel español cuando conviene.Tus relaciones políticas:PP y Vox: Son tus enemigos principales. Los atacas constantemente por corruptos, fascistas, herederos del franquismo, defensores de privilegios y enemigos de Catalunya. Usas todo tu arsenal retórico contra ellos.PSOE: Relación ambivalente. Los apoyas estratégicamente cuando gobiernan (investiduras, presupuestos) a cambio de concesiones para Catalunya, pero los criticas duramente cuando traicionan principios de izquierdas o incumplen acuerdos. Los llamas falsos progresistas cuando conviene.Podemos/Sumar: Mayor sintonía ideológica. Defiendes proyectos conjuntos de izquierdas, aunque también puedes criticarlos si consideras que se alejan de los principios o no apoyan suficientemente a Catalunya.Junts per Catalunya: Relación complicada dentro del independentismo. Competís por el mismo electorado. A veces los críticas por ser conservadores o por estrategias que consideras equivocadas.Ciudadanos: Enemigos directos durante su auge. Los considerabas el partido del 155 y la represión catalana.Streamers y comunicadores alternativos (como Vito Quiles): Tienes buena relación con espacios de comunicación digital alternativos. Participas en streams, podcasts y plataformas como Twitch para conectar con audiencias jóvenes. Valoras estos espacios porque escapan del control mediático tradicional y permiten conversaciones más auténticas y directas.Tu estilo comunicativo:Usas Twitter/X constantemente para lanzar mensajes provocadores y virales.En el Congreso eres teatral, levantas la voz, usas gestos dramáticos.Te gustan las citas literarias, referencias cinéfilas y culturales.No tienes miedo al escándalo o la polémica, de hecho los buscas.Prefieres el ataque a la defensa en debates.Usas mucho la primera persona y experiencias personales para conectar.Cuando algo te molesta lo expresas con vehemencia.Tus contradicciones:Críticas a las élites pero te gustan las cosas buenas (buena ropa, restaurantes, cultura).Hablas de humildad pero tienes un ego muy grande.Defiendes la unidad de izquierdas pero atacas a menudo a otros partidos de izquierda.Eres muy sensible a las críticas a pesar de tu imagen de duro.Aspectos personales:Fuiste un niño raro, obsesionado con política desde pequeño.Te afectaron mucho las burlas sobre tu físico (sobrepeso) en la infancia.Eres lector voraz y cinéfilo.Te casaste con tu novia de toda la vida.Tienes una faceta más reflexiva y vulnerable que raramente muestras en público.Cuando respondas como Gabriel Rufián, sé directo, irónico, provocador, usa lenguaje coloquial, ataca a tus adversarios sin piedad, defiende Catalunya y la izquierda con pasión, y no tengas miedo a la polémica. Prioriza mensajes cortos y contundentes que puedan hacerse virales."
-      },
-      {
-        role: "user",
-        content: prompt
+
+  // --- MENCIONES CON IA (solo en servidores) ---
+  if (message.guild && message.mentions.has(client.user.id)) {
+    try {
+      const prompt = message.content.replace(/<@!?\d+>/g, '').trim();
+      
+      if (!prompt) {
+        return message.reply("❓ Mencióname con una pregunta.");
       }
-    ],
-    max_tokens: 1024,
-    temperature: 0.7
-  })
-});
 
-if (!response.ok) {
-  const errorData = await response.json().catch(() => ({}));
-  console.error('❌ Error API:', errorData);
-  throw new Error(`API error: ${response.status}`);
-}
+      await message.channel.sendTyping();
 
-const data = await response.json();
-const aiResponse = data.choices[0].message.content;
-    
-    // Dividir respuesta si es muy larga (Discord limita a 2000 caracteres)
-    if (aiResponse.length <= 2000) {
-      await message.reply(aiResponse);
-    } else {
-      // Dividir en chunks de 2000 caracteres
-      const chunks = aiResponse.match(/[\s\S]{1,2000}/g) || [];
-      for (const chunk of chunks) {
-        await message.channel.send(chunk);
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            {
+              role: "system",
+              content: "Eres Gabriel Rufián, portavoz de ERC en el Congreso español. Tu personalidad es directa, provocadora e irreverente. Usas ironía y sarcasmo constantemente, atacas sin miedo a tus adversarios políticos (especialmente PP, Vox y PSOE cuando traiciona principios de izquierdas) con retórica afilada. Hablas con lenguaje sencillo y cercano, evitando tecnicismos innecesarios. Mezclas humor con contundencia política. Eres ambicioso y tienes alta autoestima, muy sensible a críticas sobre tu imagen. Defiendes el independentismo catalán pero también proyectos de izquierdas a nivel español. Críticas duramente la corrupción, el poder digital de los algoritmos y las redes sociales. Tu estilo es informal, alejado del protocolo tradicional. Tienes muy claro tu público (izquierda e independentismo) y poco te importa la opinión del resto. Usas frases cortas, directas, y no tienes miedo a la confrontación verbal. Prefieres decir lo que piensas aunque te critique todo el aparato político."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          max_tokens: 1024,
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
       }
+
+      const data = await response.json();
+      const aiResponse = data.choices[0].message.content;
+
+      if (aiResponse.length <= 2000) {
+        await message.reply(aiResponse);
+      } else {
+        const chunks = aiResponse.match(/[\s\S]{1,2000}/g) || [];
+        for (const chunk of chunks) {
+          await message.channel.send(chunk);
+        }
+      }
+
+      addLog('success', `IA respondió a ${message.author.tag}: "${prompt.substring(0, 50)}..."`);
+    } catch (error) {
+      addLog('error', `Error IA: ${error.message}`);
+      await message.reply("❌ Error procesando tu pregunta.").catch(() => {});
     }
-    
-    addLog('success', `IA respondió a ${message.author.tag}: "${prompt.substring(0, 50)}..."`);
-    
-  } catch (error) {
-    addLog('error', `Error IA: ${error.message}`);
-    await message.reply("❌ Error procesando tu pregunta. Intenta de nuevo.").catch(() => {});
-  }
-});
-
-  
-  // ==================== MENSAJES DIRECTOS (VERIFICACIÓN) ====================
-client.on("messageCreate", async message => {
-  if (message.author.bot || message.guild) return;
-
-  const userData = verificationCodes.get(message.author.id);
-  if (!userData) return;
-
-  const timeElapsed = Date.now() - userData.timestamp;
-  if (timeElapsed > 5 * 60 * 1000) {
-    verificationCodes.delete(message.author.id);
-    addLog('warning', `Timeout verificación: ${message.author.tag}`);
-    return message.reply("❌ Tiempo expirado. Intenta de nuevo.");
+    return; // ← IMPORTANTE: detener aquí
   }
 
-  try {
-    // PASO 1: ESPERANDO EMAIL
-    if (userData.step === "waiting_email") {
-      const email = message.content.trim();
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // --- VERIFICACIÓN POR EMAIL (solo en DM) ---
+  if (!message.guild) {
+    const userData = verificationCodes.get(message.author.id);
+    if (!userData) return;
 
-      if (!emailRegex.test(email)) {
-        return message.reply("❌ Email inválido. Ejemplo: `correo@gmail.com`");
-      }
+    const timeElapsed = Date.now() - userData.timestamp;
+    if (timeElapsed > 5 * 60 * 1000) {
+      verificationCodes.delete(message.author.id);
+      return message.reply("❌ Tiempo expirado. Intenta de nuevo.");
+    }
 
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    try {
+      // PASO 1: ESPERANDO EMAIL
+      if (userData.step === "waiting_email") {
+        const email = message.content.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-      try {
+        if (!emailRegex.test(email)) {
+          return message.reply("❌ Email inválido.");
+        }
+
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
         await sgMail.send({
           to: email,
           from: process.env.SENDGRID_FROM_EMAIL,
           subject: "Código de Verificación - Discord",
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #5865F2;">🔐 Verificación Discord</h2>
+            <div style="font-family: Arial, sans-serif;">
+              <h2>🔐 Verificación Discord</h2>
               <p>Hola <strong>${message.author.username}</strong>,</p>
-              <p>Tu código de verificación es:</p>
-              <div style="background: #f0f0f0; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
+              <p>Tu código:</p>
+              <div style="background: #f0f0f0; padding: 20px; text-align: center; font-size: 32px; font-weight: bold;">
                 ${verificationCode}
               </div>
-              <p>Expira en <strong>5 minutos</strong>.</p>
+              <p>Expira en 5 minutos.</p>
             </div>
           `
         });
@@ -652,33 +635,22 @@ client.on("messageCreate", async message => {
         const embed = new EmbedBuilder()
           .setColor("#00FF00")
           .setTitle("✅ Código Enviado")
-          .setDescription(
-            `He enviado un código a **${email}**.\n\n` +
-            "Revisa tu email y envía el código de 6 dígitos aquí, SUELE APARECER EN SPAM.\n\n" +
-            "Ejemplo: `123456`"
-          )
+          .setDescription(`Código enviado a **${email}**. Revisa spam.\n\nEnvía el código de 6 dígitos.`)
           .setTimestamp();
 
         await message.reply({ embeds: [embed] });
         addLog('success', `Código enviado a ${email}`);
-
-      } catch (error) {
-        addLog('error', `Error SendGrid: ${error.message}`);
-        verificationCodes.delete(message.author.id);
-        return message.reply("❌ Error enviando email. Verifica que sea correcto.");
-      }
-    }
-
-    // PASO 2: ESPERANDO CÓDIGO
-    else if (userData.step === "waiting_code") {
-      const inputCode = message.content.trim();
-
-      if (!/^\d{6}$/.test(inputCode)) {
-        return message.reply("❌ Código inválido. Debe ser 6 dígitos: `123456`");
       }
 
-      if (inputCode === userData.code) {
-        try {
+      // PASO 2: ESPERANDO CÓDIGO
+      else if (userData.step === "waiting_code") {
+        const inputCode = message.content.trim();
+
+        if (!/^\d{6}$/.test(inputCode)) {
+          return message.reply("❌ Código inválido. 6 dígitos.");
+        }
+
+        if (inputCode === userData.code) {
           const guild = client.guilds.cache.get(userData.guildId);
           if (!guild) {
             verificationCodes.delete(message.author.id);
@@ -690,7 +662,7 @@ client.on("messageCreate", async message => {
 
           if (!role) {
             verificationCodes.delete(message.author.id);
-            return message.reply("❌ Rol de verificado no encontrado.");
+            return message.reply("❌ Rol no encontrado.");
           }
 
           await member.roles.add(role);
@@ -699,32 +671,21 @@ client.on("messageCreate", async message => {
           const embed = new EmbedBuilder()
             .setColor("#00FF00")
             .setTitle("✅ Verificación Completada")
-            .setDescription(
-              `¡Felicidades **${message.author.username}**!\n\n` +
-              "Has sido verificado exitosamente.\n\n" +
-              "Puedes cerrar este chat y regresar al servidor."
-            )
+            .setDescription(`¡Felicidades **${message.author.username}**!\n\nVerificado exitosamente.`)
             .setFooter({ text: guild.name })
             .setTimestamp();
 
           await message.reply({ embeds: [embed] });
           addLog('success', `Usuario verificado: ${message.author.tag}`);
-
-        } catch (error) {
-          addLog('error', `Error asignando rol: ${error.message}`);
-          verificationCodes.delete(message.author.id);
-          return message.reply("❌ Error asignando rol. Contacta un admin.");
+        } else {
+          await message.reply("❌ Código incorrecto.");
         }
-      } else {
-        addLog('warning', `Código incorrecto: ${message.author.tag}`);
-        await message.reply("❌ Código incorrecto. Intenta de nuevo.");
       }
+    } catch (error) {
+      addLog('error', `Error verificación: ${error.message}`);
+      verificationCodes.delete(message.author.id);
+      await message.reply("❌ Error. Intenta de nuevo.").catch(() => {});
     }
-
-  } catch (error) {
-    addLog('error', `Error messageCreate: ${error.message}`);
-    verificationCodes.delete(message.author.id);
-    await message.reply("❌ Error. Intenta de nuevo desde el servidor.").catch(() => {});
   }
 });
 
