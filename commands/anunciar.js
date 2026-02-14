@@ -1,5 +1,4 @@
-
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -9,11 +8,32 @@ module.exports = {
       option.setName('mensaje')
         .setDescription('Texto del anuncio')
         .setRequired(true)
-    ),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
+    // Verificar roles permitidos (además del permiso de admin)
+    const allowedRoles = ["1442932172523831417", "1437828169230192762"];
+    const hasPermission = allowedRoles.some(roleId => 
+      interaction.member.roles.cache.has(roleId)
+    );
+    
+    if (!hasPermission) {
+      return interaction.reply({
+        content: "❌ No tienes permiso para usar este comando.",
+        ephemeral: true
+      });
+    }
+
     const msg = interaction.options.getString('mensaje');
-    await interaction.channel.send(`📢 **Anuncio:** ${msg}`);
-    await interaction.reply({ content: '✅ Anuncio enviado', ephemeral: true });
+    
+    // Enviar el anuncio
+    await interaction.channel.send(`📢 **ANUNCIO**\n\n${msg}`);
+    
+    // Confirmar al usuario
+    await interaction.reply({ 
+      content: '✅ Anuncio enviado correctamente', 
+      ephemeral: true 
+    });
   }
 };
