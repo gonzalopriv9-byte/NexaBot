@@ -102,7 +102,7 @@ client.once("ready", () => {
   
   client.user.setPresence({
     status: "online",
-    activities: [{ name: "RUFIAN", type: 0 }]
+    activities: [{ name: "Besandome con Vito💏", type: 0 }]
   });
 });
 
