@@ -17,6 +17,7 @@ const express = require("express");
 const { loadCommands } = require("./handlers/commandHandler");
 const sgMail = require("@sendgrid/mail");
 const fetch = require("node-fetch");
+const { saveDNI, generateDNINumber, getDNI, hasDNI, deleteDNI } = require("./utils/database");
 
 // ==================== DEBUGGING ====================
 console.log('🔍 TOKEN detectado:', process.env.DISCORD_TOKEN ? 'SÍ (primeros 10 chars: ' + process.env.DISCORD_TOKEN.substring(0, 10) + ')' : 'NO');
@@ -107,7 +108,7 @@ client.once("ready", () => {
   
   client.user.setPresence({
     status: "online",
-    activities: [{ name: "Ayudando a Cataluña", type: 0 }]
+    activities: [{ name: "Besandome con Vito💏", type: 0 }]
   });
 });
 
@@ -122,6 +123,8 @@ client.on("warn", info => {
 
 // ==================== INTERACTION CREATE ====================
 client.on("interactionCreate", async interaction => {
+  console.log(`📨 Interacción recibida: ${interaction.customId || interaction.commandName}`);
+  
   try {
     // ==================== COMANDOS SLASH ====================
     if (interaction.isChatInputCommand()) {
@@ -257,67 +260,82 @@ client.on("interactionCreate", async interaction => {
     }
 
     // ==================== MODAL: CREAR DNI ====================
-if (interaction.isModalSubmit() && interaction.customId === "dni_modal") {
-  await interaction.deferReply({ ephemeral: true });
+    if (interaction.isModalSubmit() && interaction.customId === "dni_modal") {
+      await interaction.deferReply({ ephemeral: true });
 
-  const { saveDNI, generateDNINumber } = require("./utils/database");
+      try {
+        const nombreCompleto = interaction.fields.getTextInputValue("nombre_completo");
+        const fechaNacimiento = interaction.fields.getTextInputValue("fecha_nacimiento");
+        const nacionalidad = interaction.fields.getTextInputValue("nacionalidad");
+        const direccion = interaction.fields.getTextInputValue("direccion");
+        const telefono = interaction.fields.getTextInputValue("telefono");
 
-  const nombreCompleto = interaction.fields.getTextInputValue("nombre_completo");
-  const fechaNacimiento = interaction.fields.getTextInputValue("fecha_nacimiento");
-  const nacionalidad = interaction.fields.getTextInputValue("nacionalidad");
-  const direccion = interaction.fields.getTextInputValue("direccion");
-  const telefono = interaction.fields.getTextInputValue("telefono");
+        // Validar formato de fecha
+        const fechaRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+        if (!fechaRegex.test(fechaNacimiento)) {
+          return interaction.editReply({
+            content: "❌ Formato de fecha inválido. Usa DD/MM/AAAA (ejemplo: 15/03/1995)"
+          });
+        }
 
-  // Validar formato de fecha
-  const fechaRegex = /^\d{2}\/\d{2}\/\d{4}$/;
-  if (!fechaRegex.test(fechaNacimiento)) {
-    return interaction.editReply({
-      content: "❌ Formato de fecha inválido. Usa DD/MM/AAAA (ejemplo: 15/03/1995)"
-    });
-  }
+        // Validar formato de teléfono
+        const telefonoRegex = /^\d{9,15}$/;
+        if (!telefonoRegex.test(telefono.replace(/\s/g, ''))) {
+          return interaction.editReply({
+            content: "❌ Formato de teléfono inválido. Debe contener solo números (9-15 dígitos)."
+          });
+        }
 
-  // Generar número de DNI único
-  const numeroDNI = generateDNINumber();
+        // Generar número de DNI único
+        const numeroDNI = generateDNINumber();
 
-  const dniData = {
-    numeroDNI,
-    nombreCompleto,
-    fechaNacimiento,
-    nacionalidad,
-    direccion,
-    telefono,
-    userId: interaction.user.id,
-    username: interaction.user.username
-  };
+        const dniData = {
+          numeroDNI,
+          nombreCompleto,
+          fechaNacimiento,
+          nacionalidad,
+          direccion,
+          telefono,
+          userId: interaction.user.id,
+          username: interaction.user.username
+        };
 
-  const success = saveDNI(interaction.user.id, dniData);
+        const success = saveDNI(interaction.user.id, dniData);
 
-  if (success) {
-    const { EmbedBuilder } = require("discord.js");
-    
-    const embed = new EmbedBuilder()
-      .setColor("#00FF00")
-      .setTitle("✅ DNI Creado Exitosamente")
-      .setDescription(`Tu DNI ha sido registrado en la base de datos.`)
-      .addFields(
-        { name: "📝 Número DNI", value: `\`${numeroDNI}\``, inline: true },
-        { name: "👤 Nombre", value: nombreCompleto, inline: true }
-      )
-      .setFooter({ text: "Usa /verdni para ver tu DNI completo" })
-      .setTimestamp();
+        if (success) {
+          const embed = new EmbedBuilder()
+            .setColor("#00FF00")
+            .setTitle("✅ DNI Creado Exitosamente")
+            .setDescription(`Tu DNI ha sido registrado en la base de datos.`)
+            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 128 }))
+            .addFields(
+              { name: "📝 Número DNI", value: `\`${numeroDNI}\``, inline: true },
+              { name: "👤 Nombre", value: nombreCompleto, inline: true },
+              { name: "🎂 Fecha de Nacimiento", value: fechaNacimiento, inline: true },
+              { name: "🌍 Nacionalidad", value: nacionalidad, inline: true },
+              { name: "📞 Teléfono", value: telefono, inline: true }
+            )
+            .setFooter({ text: "Usa /verdni para ver tu DNI completo en cualquier momento" })
+            .setTimestamp();
 
-    await interaction.editReply({
-      embeds: [embed]
-    });
+          await interaction.editReply({
+            embeds: [embed]
+          });
 
-    addLog('success', `DNI creado para ${interaction.user.tag}: ${numeroDNI}`);
-  } else {
-    await interaction.editReply({
-      content: "❌ Error al guardar el DNI. Intenta de nuevo."
-    });
-  }
-  return;
-}
+          addLog('success', `DNI creado para ${interaction.user.tag}: ${numeroDNI}`);
+        } else {
+          await interaction.editReply({
+            content: "❌ Error al guardar el DNI. Intenta de nuevo."
+          });
+        }
+      } catch (error) {
+        addLog('error', `Error creando DNI: ${error.message}`);
+        await interaction.editReply({
+          content: "❌ Hubo un error procesando tu DNI. Verifica que los datos sean correctos."
+        });
+      }
+      return;
+    }
 
     // ==================== BOTÓN: RECLAMAR TICKET ====================
     if (interaction.isButton() && interaction.customId === "claim_ticket") {
@@ -585,14 +603,19 @@ if (interaction.isModalSubmit() && interaction.customId === "dni_modal") {
 });
 
 // ==================== MANEJADOR DE MENSAJES (IA + VERIFICACIÓN) ====================
+const processedMessages = new Set();
+
 client.on("messageCreate", async message => {
   // Ignorar bots
   if (message.author.bot) return;
-  
- // Evitar procesar el mismo mensaje múltiples veces
+
+  // Evitar procesar el mismo mensaje múltiples veces
   if (processedMessages.has(message.id)) return;
   processedMessages.add(message.id);
   
+  // Limpiar caché cada 30 segundos
+  setTimeout(() => processedMessages.delete(message.id), 30000);
+
   // --- MENCIONES CON IA (solo en servidores) ---
   if (message.guild && message.mentions.has(client.user.id)) {
     try {
@@ -648,7 +671,7 @@ client.on("messageCreate", async message => {
       addLog('error', `Error IA: ${error.message}`);
       await message.reply("❌ Error procesando tu pregunta.").catch(() => {});
     }
-    return; // ← IMPORTANTE: detener aquí
+    return;
   }
 
   // --- VERIFICACIÓN POR EMAIL (solo en DM) ---
