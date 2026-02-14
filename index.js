@@ -407,19 +407,19 @@ client.on("interactionCreate", async interaction => {
 
         const staffName = staffMember ? staffMember.tag : 'No asignado';
 
-        const ratingEmbed = new EmbedBuilder()
-          .setColor(stars >= 4 ? '#00FF00' : stars >= 3 ? '#FFA500' : '#FF0000')
-          .setTitle('⭐ Valoración del Ticket')
-          .addFields(
-            { name: '👤 Usuario', value: `${interaction.user}`, inline: true },
-            { name: '🛡️ Staff', value: staffName, inline: true },
-            { name: '⭐ Estrellas', value: '⭐'.
-            { name: '⭐ Estrellas', value: '⭐'.repeat(parseInt(stars)), inline: false },
-            { name: '💬 Comentario', value: reason, inline: false },
-            { name: '🎫 Ticket', value: channel.name, inline: true },
-            { name: '📅 Fecha', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
-          )
-          .setTimestamp();
+     const ratingEmbed = new EmbedBuilder()
+  .setColor(stars >= 4 ? '#00FF00' : stars >= 3 ? '#FFA500' : '#FF0000')
+  .setTitle('⭐ Valoración del Ticket')
+  .addFields(
+    { name: '👤 Usuario', value: `${interaction.user}`, inline: true },
+    { name: '🛡️ Staff', value: staffName, inline: true },
+    { name: '⭐ Estrellas', value: '⭐'.repeat(parseInt(stars)), inline: false },
+    { name: '💬 Comentario', value: reason, inline: false },
+    { name: '🎫 Ticket', value: channel.name, inline: true },
+    { name: '📅 Fecha', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
+  )
+  .setTimestamp();
+
 
         const ratingsChannel = interaction.guild.channels.cache.get(RATINGS_CHANNEL_ID);
         
