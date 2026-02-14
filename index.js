@@ -466,7 +466,7 @@ client.on("messageCreate", async message => {
           .setTitle("✅ Código Enviado")
           .setDescription(
             `He enviado un código a **${email}**.\n\n` +
-            "Revisa tu email y envía el código de 6 dígitos aquí.\n\n" +
+            "Revisa tu email y envía el código de 6 dígitos aquí, SUELE APARECER EN SPAM.\n\n" +
             "Ejemplo: `123456`"
           )
           .setTimestamp();
