@@ -545,31 +545,31 @@ client.on("messageCreate", async message => {
     await message.channel.sendTyping();
     
     // Llamar a la API de Claude
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01"
-      },
-   body: JSON.stringify({
-  model: "claude-sonnet-4-20250514",
-  max_tokens: 1024,
-  system: "Eres un asistente amigable en Discord.",
-  messages: [
-    {
-      role: "user",
-      content: prompt
-    }
-  ]
-})
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`); // ← CORREGÍ ESTO (era backtick, no paréntesis)
-    }
-    
-    const data = await response.json();
-    const aiResponse = data.content[0].text;
+const response = await fetch("https://api.anthropic.com/v1/messages", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-api-key": process.env.ANTHROPIC_API_KEY,
+    "anthropic-version": "2023-06-01"
+  },
+  body: JSON.stringify({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1024,
+    system: "Eres un asistente amigable en Discord.",
+    messages: [
+      {
+        role: "user",
+        content: prompt
+      }
+    ]
+  })
+});
+
+if (!response.ok) {
+  const errorData = await response.json().catch(() => ({}));
+  console.error('❌ Error API completo:', errorData);
+  throw new Error(`API error: ${response.status} - ${JSON.stringify(errorData)}`);
+}
     
     // Dividir respuesta si es muy larga (Discord limita a 2000 caracteres)
     if (aiResponse.length <= 2000) {
