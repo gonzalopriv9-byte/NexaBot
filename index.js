@@ -525,7 +525,11 @@ client.on("interactionCreate", async interaction => {
 client.on("messageCreate", async message => {
   // Ignorar bots
   if (message.author.bot) return;
-
+  
+ // Evitar procesar el mismo mensaje múltiples veces
+  if (processedMessages.has(message.id)) return;
+  processedMessages.add(message.id);
+  
   // --- MENCIONES CON IA (solo en servidores) ---
   if (message.guild && message.mentions.has(client.user.id)) {
     try {
