@@ -13,7 +13,7 @@ module.exports = {
 
   async execute(interaction) {
     // Verificar roles permitidos (además del permiso de admin)
-    const allowedRoles = ["1442932172523831417", "1437828169230192762"];
+    const allowedRoles = ["1469344936620195872"];
     const hasPermission = allowedRoles.some(roleId => 
       interaction.member.roles.cache.has(roleId)
     );
