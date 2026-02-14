@@ -552,16 +552,17 @@ client.on("messageCreate", async message => {
         "x-api-key": process.env.ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01"
       },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1024,
-        system: "Eres un asistente amigable en Discord.",
-            role: "user",
-            content: prompt
-          }
-      
-      })
-    });
+   body: JSON.stringify({
+  model: "claude-sonnet-4-20250514",
+  max_tokens: 1024,
+  system: "Eres un asistente amigable en Discord.",
+  messages: [
+    {
+      role: "user",
+      content: prompt
+    }
+  ]
+})
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`); // ← CORREGÍ ESTO (era backtick, no paréntesis)
