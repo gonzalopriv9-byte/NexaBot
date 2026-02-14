@@ -329,34 +329,155 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
-    // BOTÓN: CERRAR TICKET
-    if (interaction.isButton() && interaction.customId === "close_ticket") {
-      const hasStaffRole = STAFF_ROLES.some(roleId => 
-        interaction.member.roles.cache.has(roleId)
-      );
+  // ==================== BOTÓN CERRAR TICKET CON VALORACIÓN ====================
+if (interaction.customId === 'close_ticket') {
+  
+  const channel = interaction.channel;
+  const ticketOwnerId = channel.topic; // ID del creador guardado en topic
+  const staffRoleId = '1469344936620195872';
+  
+  // Verificar permisos
+  if (interaction.user.id !== ticketOwnerId && !interaction.member.roles.cache.has(staffRoleId)) {
+    return interaction.reply({
+      content: '❌ Solo el creador del ticket o el staff puede cerrarlo.',
+      flags: 64
+    });
+  }
 
-      if (!hasStaffRole) {
-        return interaction.reply({
-          content: "❌ Solo el staff puede cerrar tickets.",
-          ephemeral: true
-        });
+  // Crear el modal de valoración
+  const modal = new ModalBuilder()
+    .setCustomId('ticket_rating_modal')
+    .setTitle('Valoración del Ticket');
+
+  // Campo: Estrellas (1-5)
+  const starsInput = new TextInputBuilder()
+    .setCustomId('rating_stars')
+    .setLabel('¿Cuántas estrellas darías? (1-5)')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Escribe un número del 1 al 5')
+    .setRequired(true)
+    .setMinLength(1)
+    .setMaxLength(1);
+
+  // Campo: Razón/Comentario
+  const reasonInput = new TextInputBuilder()
+    .setCustomId('rating_reason')
+    .setLabel('¿Cómo te trataron? ¿Algún comentario?')
+    .setStyle(TextInputStyle.Paragraph)
+    .setPlaceholder('Escribe tu experiencia...')
+    .setRequired(true)
+    .setMinLength(10)
+    .setMaxLength(1000);
+
+  const firstRow = new ActionRowBuilder().addComponents(starsInput);
+  const secondRow = new ActionRowBuilder().addComponents(reasonInput);
+  
+  modal.addComponents(firstRow, secondRow);
+
+  await interaction.showModal(modal);
+}
+
+// ==================== PROCESAR VALORACIÓN Y CERRAR TICKET ====================
+if (interaction.customId === 'ticket_rating_modal') {
+  
+  const stars = interaction.fields.getTextInputValue('rating_stars');
+  const reason = interaction.fields.getTextInputValue('rating_reason');
+
+  // Validar estrellas
+  if (!/^[1-5]$/.test(stars)) {
+    return interaction.reply({
+      content: '❌ Las estrellas deben ser un número entre 1 y 5.',
+      flags: 64
+    });
+  }
+
+  const channel = interaction.channel;
+  const staffRoleId = '1469344936620195872';
+  const ratingsChannelId = '1469412480290914497';
+  
+  try {
+    // Detectar quién atendió el ticket (último staff que escribió)
+    const messages = await channel.messages.fetch({ limit: 100 });
+    
+    let staffMember = null;
+    for (const msg of messages.values()) {
+      if (msg.author.bot) continue;
+      if (msg.member?.roles.cache.has(staffRoleId)) {
+        staffMember = msg.author;
+        break;
       }
-
-      await interaction.reply({
-        content: "🔒 Cerrando ticket en 5 segundos..."
-      });
-
-      addLog('info', `Ticket cerrado por ${interaction.user.tag}`);
-
-      setTimeout(async () => {
-        try {
-          await interaction.channel.delete();
-        } catch (error) {
-          addLog('error', `Error cerrando: ${error.message}`);
-        }
-      }, 5000);
-      return;
     }
+
+    const staffName = staffMember ? staffMember.tag : 'No asignado';
+
+    // Crear embed de valoración
+    const ratingEmbed = new EmbedBuilder()
+      .setColor(stars >= 4 ? '#00FF00' : stars >= 3 ? '#FFA500' : '#FF0000')
+      .setTitle('⭐ Valoración del Ticket')
+      .addFields(
+        { name: '👤 Usuario', value: `${interaction.user}`, inline: true },
+        { name: '🛡️ Staff', value: staffName, inline: true },
+        { name: '⭐ Estrellas', value: '⭐'.repeat(parseInt(stars)), inline: false },
+        { name: '💬 Comentario', value: reason, inline: false },
+        { name: '🎫 Ticket', value: channel.name, inline: true },
+        { name: '📅 Fecha', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
+      )
+      .setTimestamp();
+
+    // Enviar valoración al canal de ratings
+    const ratingsChannel = interaction.guild.channels.cache.get(ratingsChannelId);
+    
+    if (ratingsChannel) {
+      await ratingsChannel.send({ embeds: [ratingEmbed] });
+    }
+
+    // Confirmación al usuario
+    await interaction.reply({
+      content: '✅ ¡Gracias por tu valoración! El ticket se cerrará en 5 segundos...',
+      embeds: [ratingEmbed]
+    });
+
+    addLog('info', `Ticket ${channel.name} valorado: ${stars}⭐ por ${interaction.user.tag}`);
+
+    // Esperar 5 segundos y cerrar
+    setTimeout(async () => {
+      try {
+        // Crear transcript
+        const allMessages = await channel.messages.fetch({ limit: 100 });
+        const transcript = allMessages.reverse().map(m => 
+          `[${m.createdAt.toLocaleString('es-ES')}] ${m.author.tag}: ${m.content}`
+        ).join('\n');
+
+        // Enviar transcript por DM
+        try {
+          await interaction.user.send({
+            content: `📋 **Transcript del ticket ${channel.name}**`,
+            files: [{
+              attachment: Buffer.from(transcript, 'utf-8'),
+              name: `ticket-${channel.name}-${Date.now()}.txt`
+            }]
+          });
+        } catch (err) {
+          console.error('No se pudo enviar transcript por DM:', err);
+        }
+
+        // Eliminar canal
+        await channel.delete(`Ticket cerrado por ${interaction.user.tag} - ${stars}⭐`);
+        
+      } catch (error) {
+        console.error('Error al cerrar ticket:', error);
+      }
+    }, 5000);
+
+  } catch (error) {
+    console.error('Error al procesar valoración:', error);
+    await interaction.reply({
+      content: '❌ Error al procesar la valoración.',
+      flags: 64
+    });
+  }
+}
+
 
     // BOTÓN: INICIAR VERIFICACIÓN
     if (interaction.isButton() && interaction.customId === "verify_start") {
