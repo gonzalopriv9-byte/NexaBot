@@ -37,6 +37,14 @@ const RATINGS_CHANNEL_ID = "1469412480290914497";
 const VERIFIED_ROLE_ID = "1471930183509475388";
 const verificationCodes = new Map();
 
+// ==================== VARIABLES TRABAJOS ====================
+const TRABAJOS = {
+  policia: { roleId: "1472275390977282101", emoji: "👮", nombre: "Policía" },
+  medico: { roleId: "1472275537308286976", emoji: "⚕️", nombre: "Médico" },
+  bombero: { roleId: "1472275475895419073", emoji: "🚒", nombre: "Bombero" },
+  mecanico: { roleId: "1472275662470385794", emoji: "🔧", nombre: "Mecánico (ADAC)" }
+};
+
 // ==================== CONFIGURAR SENDGRID ====================
 if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -549,6 +557,81 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
+    // ==================== SISTEMA DE TRABAJOS ====================
+    if (interaction.isButton() && interaction.customId.startsWith("trabajo_")) {
+      const trabajoSeleccionado = interaction.customId.replace("trabajo_", "");
+
+      // Renunciar a trabajo
+      if (trabajoSeleccionado === "quitar") {
+        let trabajoActual = null;
+        for (const [key, trabajo] of Object.entries(TRABAJOS)) {
+          if (interaction.member.roles.cache.has(trabajo.roleId)) {
+            trabajoActual = trabajo;
+            await interaction.member.roles.remove(trabajo.roleId);
+            break;
+          }
+        }
+
+        if (trabajoActual) {
+          await interaction.reply({
+            content: `✅ Has renunciado a tu trabajo de **${trabajoActual.nombre}**.`,
+            ephemeral: true
+          });
+        } else {
+          await interaction.reply({
+            content: "❌ No tienes ningún trabajo actualmente.",
+            ephemeral: true
+          });
+        }
+
+        // Actualizar panel
+        await actualizarPanelTrabajos(interaction);
+        return;
+      }
+
+      // Seleccionar trabajo
+      const trabajo = TRABAJOS[trabajoSeleccionado];
+      if (!trabajo) return;
+
+      try {
+        // Quitar roles de otros trabajos
+        for (const [key, t] of Object.entries(TRABAJOS)) {
+          if (key !== trabajoSeleccionado && interaction.member.roles.cache.has(t.roleId)) {
+            await interaction.member.roles.remove(t.roleId);
+          }
+        }
+
+        // Verificar si ya tiene el trabajo
+        if (interaction.member.roles.cache.has(trabajo.roleId)) {
+          return interaction.reply({
+            content: `ℹ️ Ya eres **${trabajo.nombre}**.`,
+            ephemeral: true
+          });
+        }
+
+        // Dar nuevo trabajo
+        await interaction.member.roles.add(trabajo.roleId);
+
+        await interaction.reply({
+          content: `${trabajo.emoji} ¡Felicidades! Ahora eres **${trabajo.nombre}**.`,
+          ephemeral: true
+        });
+
+        addLog('info', `${interaction.user.tag} ahora es ${trabajo.nombre}`);
+
+        // Actualizar panel
+        await actualizarPanelTrabajos(interaction);
+
+      } catch (error) {
+        console.error("Error asignando trabajo:", error);
+        await interaction.reply({
+          content: "❌ Error al asignar el trabajo.",
+          ephemeral: true
+        });
+      }
+      return;
+    }
+
     // ==================== BOTÓN: INICIAR VERIFICACIÓN ====================
     if (interaction.isButton() && interaction.customId === "verify_start") {
       if (interaction.member.roles.cache.has(VERIFIED_ROLE_ID)) {
@@ -601,6 +684,73 @@ client.on("interactionCreate", async interaction => {
     addLog('error', `Error interacción: ${error.message}`);
   }
 });
+
+// ==================== FUNCIÓN ACTUALIZAR PANEL TRABAJOS ====================
+async function actualizarPanelTrabajos(interaction) {
+  try {
+    const guild = interaction.guild;
+    const contadores = {};
+    
+    for (const [key, trabajo] of Object.entries(TRABAJOS)) {
+      const role = guild.roles.cache.get(trabajo.roleId);
+      contadores[key] = role ? role.members.size : 0;
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor("#00BFFF")
+      .setTitle("💼 CENTRO DE EMPLEO")
+      .setDescription(
+        "Selecciona tu trabajo haciendo clic en el botón correspondiente.\n\n" +
+        "**📊 Personal actual por departamento:**\n" +
+        `${TRABAJOS.policia.emoji} **Policía:** \`${contadores.policia}\` oficiales\n` +
+        `${TRABAJOS.medico.emoji} **Médico:** \`${contadores.medico}\` doctores\n` +
+        `${TRABAJOS.bombero.emoji} **Bombero:** \`${contadores.bombero}\` bomberos\n` +
+        `${TRABAJOS.mecanico.emoji} **Mecánico:** \`${contadores.mecanico}\` mecánicos\n\n` +
+        "⚠️ **Importante:**\n" +
+        "• Solo puedes tener un trabajo a la vez\n" +
+        "• Al seleccionar un trabajo nuevo, perderás el anterior\n" +
+        "• El panel se actualiza automáticamente"
+      )
+      .setFooter({ text: "Sistema de empleos" })
+      .setTimestamp();
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("trabajo_policia")
+        .setLabel(`${TRABAJOS.policia.emoji} Policía (${contadores.policia})`)
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId("trabajo_medico")
+        .setLabel(`${TRABAJOS.medico.emoji} Médico (${contadores.medico})`)
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("trabajo_bombero")
+        .setLabel(`${TRABAJOS.bombero.emoji} Bombero (${contadores.bombero})`)
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId("trabajo_mecanico")
+        .setLabel(`${TRABAJOS.mecanico.emoji} Mecánico (${contadores.mecanico})`)
+        .setStyle(ButtonStyle.Success)
+    );
+
+    const row3 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("trabajo_quitar")
+        .setLabel("🚫 Renunciar a mi trabajo")
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    await interaction.message.edit({
+      embeds: [embed],
+      components: [row1, row2, row3]
+    });
+  } catch (error) {
+    console.error("Error actualizando panel:", error);
+  }
+}
 
 // ==================== MANEJADOR DE MENSAJES (IA + VERIFICACIÓN) ====================
 const processedMessages = new Set();
