@@ -17,26 +17,30 @@ const express = require("express");
 const { loadCommands } = require("./handlers/commandHandler");
 const sgMail = require("@sendgrid/mail");
 
-// ----------------- VARIABLES BOT -----------------
+// ==================== DEBUGGING ====================
+console.log('🔍 TOKEN detectado:', process.env.DISCORD_TOKEN ? 'SÍ (primeros 10 chars: ' + process.env.DISCORD_TOKEN.substring(0, 10) + ')' : 'NO');
+
+// ==================== VARIABLES BOT ====================
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID;
 
-// ----------------- VARIABLES TICKETS -----------------
+// ==================== VARIABLES TICKETS ====================
 const TICKET_CATEGORY_ID = "1471929885512695972";
 const STAFF_ROLES = ["1469344936620195872"];
+const RATINGS_CHANNEL_ID = "1469412480290914497";
 
-// ----------------- VARIABLES VERIFICACIÓN -----------------
+// ==================== VARIABLES VERIFICACIÓN ====================
 const VERIFIED_ROLE_ID = "1471930183509475388";
 const verificationCodes = new Map();
 
-// Configurar SendGrid
+// ==================== CONFIGURAR SENDGRID ====================
 if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
-// ----------------- SISTEMA DE LOGS -----------------
+// ==================== SISTEMA DE LOGS ====================
 const logs = [];
 const MAX_LOGS = 100;
 
@@ -52,7 +56,6 @@ function addLog(type, message) {
   });
   
   const logEntry = { timestamp, type, message };
-  
   logs.push(logEntry);
   if (logs.length > MAX_LOGS) logs.shift();
   
@@ -65,7 +68,7 @@ function addLog(type, message) {
   console.log(`${emoji[type] || '📝'} [${timestamp}] ${message}`);
 }
 
-// Validar variables de entorno
+// ==================== VALIDAR VARIABLES ====================
 const missingVars = [];
 if (!TOKEN) missingVars.push("DISCORD_TOKEN");
 if (!CLIENT_ID) missingVars.push("CLIENT_ID");
@@ -77,7 +80,7 @@ if (missingVars.length > 0) {
   botEnabled = false;
 }
 
-// ----------------- CREAR CLIENTE DISCORD -----------------
+// ==================== CREAR CLIENTE DISCORD ====================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds, 
@@ -96,11 +99,10 @@ if (botEnabled) {
   loadCommands(client);
 }
 
-// ==================== EVENTOS DISCORD ====================
-
-// ---------- READY ----------
+// ==================== EVENTO READY ====================
 client.once("ready", () => {
   addLog('success', `🎉 Bot conectado: ${client.user.tag}`);
+  console.log('🔍 Intents configurados:', client.options.intents);
   
   client.user.setPresence({
     status: "online",
@@ -108,7 +110,7 @@ client.once("ready", () => {
   });
 });
 
-// ---------- ERRORES DISCORD ----------
+// ==================== ERRORES DISCORD ====================
 client.on("error", error => {
   addLog('error', `Discord error: ${error.message}`);
 });
@@ -117,10 +119,10 @@ client.on("warn", info => {
   addLog('warning', `Discord warning: ${info}`);
 });
 
-// ---------- INTERACTIONS ----------
+// ==================== INTERACTION CREATE ====================
 client.on("interactionCreate", async interaction => {
   try {
-    // COMANDOS SLASH
+    // ==================== COMANDOS SLASH ====================
     if (interaction.isChatInputCommand()) {
       if (global.maintenanceMode && interaction.user.id !== MAINTENANCE_USER_ID) {
         return interaction.reply({
@@ -147,7 +149,7 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
-    // BOTÓN: ABRIR TICKET
+    // ==================== BOTÓN: ABRIR TICKET ====================
     if (interaction.isButton() && interaction.customId === "open_ticket") {
       const modal = new ModalBuilder()
         .setCustomId("ticket_modal")
@@ -176,7 +178,7 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
-    // MODAL: CREAR TICKET
+    // ==================== MODAL: CREAR TICKET ====================
     if (interaction.isModalSubmit() && interaction.customId === "ticket_modal") {
       await interaction.deferReply({ ephemeral: true });
 
@@ -190,6 +192,7 @@ client.on("interactionCreate", async interaction => {
           name: `ticket-${interaction.user.username}`,
           type: ChannelType.GuildText,
           parent: TICKET_CATEGORY_ID,
+          topic: interaction.user.id, // Guardar ID del creador en topic
           permissionOverwrites: [
             {
               id: guild.id,
@@ -252,7 +255,7 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
-    // BOTÓN: RECLAMAR TICKET
+    // ==================== BOTÓN: RECLAMAR TICKET ====================
     if (interaction.isButton() && interaction.customId === "claim_ticket") {
       const hasStaffRole = STAFF_ROLES.some(roleId => 
         interaction.member.roles.cache.has(roleId)
@@ -329,157 +332,195 @@ client.on("interactionCreate", async interaction => {
       return;
     }
 
-  // ==================== BOTÓN CERRAR TICKET CON VALORACIÓN ====================
-if (interaction.customId === 'close_ticket') {
-  
-  const channel = interaction.channel;
-  const ticketOwnerId = channel.topic; // ID del creador guardado en topic
-  const staffRoleId = '1469344936620195872';
-  
-  // Verificar permisos
-  if (interaction.user.id !== ticketOwnerId && !interaction.member.roles.cache.has(staffRoleId)) {
-    return interaction.reply({
-      content: '❌ Solo el creador del ticket o el staff puede cerrarlo.',
-      flags: 64
-    });
-  }
-
-  // Crear el modal de valoración
-  const modal = new ModalBuilder()
-    .setCustomId('ticket_rating_modal')
-    .setTitle('Valoración del Ticket');
-
-  // Campo: Estrellas (1-5)
-  const starsInput = new TextInputBuilder()
-    .setCustomId('rating_stars')
-    .setLabel('¿Cuántas estrellas darías? (1-5)')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('Escribe un número del 1 al 5')
-    .setRequired(true)
-    .setMinLength(1)
-    .setMaxLength(1);
-
-  // Campo: Razón/Comentario
-  const reasonInput = new TextInputBuilder()
-    .setCustomId('rating_reason')
-    .setLabel('¿Cómo te trataron? ¿Algún comentario?')
-    .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('Escribe tu experiencia...')
-    .setRequired(true)
-    .setMinLength(10)
-    .setMaxLength(1000);
-
-  const firstRow = new ActionRowBuilder().addComponents(starsInput);
-  const secondRow = new ActionRowBuilder().addComponents(reasonInput);
-  
-  modal.addComponents(firstRow, secondRow);
-
-  await interaction.showModal(modal);
-}
-
-// ==================== PROCESAR VALORACIÓN Y CERRAR TICKET ====================
-if (interaction.customId === 'ticket_rating_modal') {
-  
-  const stars = interaction.fields.getTextInputValue('rating_stars');
-  const reason = interaction.fields.getTextInputValue('rating_reason');
-
-  // Validar estrellas
-  if (!/^[1-5]$/.test(stars)) {
-    return interaction.reply({
-      content: '❌ Las estrellas deben ser un número entre 1 y 5.',
-      flags: 64
-    });
-  }
-
-  const channel = interaction.channel;
-  const staffRoleId = '1469344936620195872';
-  const ratingsChannelId = '1469412480290914497';
-  
-  try {
-    // Detectar quién atendió el ticket (último staff que escribió)
-    const messages = await channel.messages.fetch({ limit: 100 });
-    
-    let staffMember = null;
-    for (const msg of messages.values()) {
-      if (msg.author.bot) continue;
-      if (msg.member?.roles.cache.has(staffRoleId)) {
-        staffMember = msg.author;
-        break;
+    // ==================== BOTÓN: CERRAR TICKET CON VALORACIÓN ====================
+    if (interaction.isButton() && interaction.customId === 'close_ticket') {
+      
+      const channel = interaction.channel;
+      const ticketOwnerId = channel.topic;
+      const staffRoleId = '1469344936620195872';
+      
+      if (interaction.user.id !== ticketOwnerId && !interaction.member.roles.cache.has(staffRoleId)) {
+        return interaction.reply({
+          content: '❌ Solo el creador del ticket o el staff puede cerrarlo.',
+          flags: 64
+        });
       }
+
+      const modal = new ModalBuilder()
+        .setCustomId('ticket_rating_modal')
+        .setTitle('Valoración del Ticket');
+
+      const starsInput = new TextInputBuilder()
+        .setCustomId('rating_stars')
+        .setLabel('¿Cuántas estrellas darías? (1-5)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Escribe un número del 1 al 5')
+        .setRequired(true)
+        .setMinLength(1)
+        .setMaxLength(1);
+
+      const reasonInput = new TextInputBuilder()
+        .setCustomId('rating_reason')
+        .setLabel('¿Cómo te trataron? ¿Algún comentario?')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Escribe tu experiencia...')
+        .setRequired(true)
+        .setMinLength(10)
+        .setMaxLength(1000);
+
+      const firstRow = new ActionRowBuilder().addComponents(starsInput);
+      const secondRow = new ActionRowBuilder().addComponents(reasonInput);
+      
+      modal.addComponents(firstRow, secondRow);
+
+      await interaction.showModal(modal);
+      return;
     }
 
-    const staffName = staffMember ? staffMember.tag : 'No asignado';
+    // ==================== MODAL: PROCESAR VALORACIÓN ====================
+    if (interaction.isModalSubmit() && interaction.customId === 'ticket_rating_modal') {
+      
+      const stars = interaction.fields.getTextInputValue('rating_stars');
+      const reason = interaction.fields.getTextInputValue('rating_reason');
 
-    // Crear embed de valoración
-    const ratingEmbed = new EmbedBuilder()
-      .setColor(stars >= 4 ? '#00FF00' : stars >= 3 ? '#FFA500' : '#FF0000')
-      .setTitle('⭐ Valoración del Ticket')
-      .addFields(
-        { name: '👤 Usuario', value: `${interaction.user}`, inline: true },
-        { name: '🛡️ Staff', value: staffName, inline: true },
-        { name: '⭐ Estrellas', value: '⭐'.repeat(parseInt(stars)), inline: false },
-        { name: '💬 Comentario', value: reason, inline: false },
-        { name: '🎫 Ticket', value: channel.name, inline: true },
-        { name: '📅 Fecha', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
-      )
-      .setTimestamp();
+      if (!/^[1-5]$/.test(stars)) {
+        return interaction.reply({
+          content: '❌ Las estrellas deben ser un número entre 1 y 5.',
+          flags: 64
+        });
+      }
 
-    // Enviar valoración al canal de ratings
-    const ratingsChannel = interaction.guild.channels.cache.get(ratingsChannelId);
-    
-    if (ratingsChannel) {
-      await ratingsChannel.send({ embeds: [ratingEmbed] });
-    }
-
-    // Confirmación al usuario
-    await interaction.reply({
-      content: '✅ ¡Gracias por tu valoración! El ticket se cerrará en 5 segundos...',
-      embeds: [ratingEmbed]
-    });
-
-    addLog('info', `Ticket ${channel.name} valorado: ${stars}⭐ por ${interaction.user.tag}`);
-
-    // Esperar 5 segundos y cerrar
-    setTimeout(async () => {
+      const channel = interaction.channel;
+      const staffRoleId = '1469344936620195872';
+      
       try {
-        // Crear transcript
-        const allMessages = await channel.messages.fetch({ limit: 100 });
-        const transcript = allMessages.reverse().map(m => 
-          `[${m.createdAt.toLocaleString('es-ES')}] ${m.author.tag}: ${m.content}`
-        ).join('\n');
-
-        // Enviar transcript por DM
-        try {
-          await interaction.user.send({
-            content: `📋 **Transcript del ticket ${channel.name}**`,
-            files: [{
-              attachment: Buffer.from(transcript, 'utf-8'),
-              name: `ticket-${channel.name}-${Date.now()}.txt`
-            }]
-          });
-        } catch (err) {
-          console.error('No se pudo enviar transcript por DM:', err);
+        const messages = await channel.messages.fetch({ limit: 100 });
+        
+        let staffMember = null;
+        for (const msg of messages.values()) {
+          if (msg.author.bot) continue;
+          if (msg.member?.roles.cache.has(staffRoleId)) {
+            staffMember = msg.author;
+            break;
+          }
         }
 
-        // Eliminar canal
-        await channel.delete(`Ticket cerrado por ${interaction.user.tag} - ${stars}⭐`);
+        const staffName = staffMember ? staffMember.tag : 'No asignado';
+
+        const ratingEmbed = new EmbedBuilder()
+          .setColor(stars >= 4 ? '#00FF00' : stars >= 3 ? '#FFA500' : '#FF0000')
+          .setTitle('⭐ Valoración del Ticket')
+          .addFields(
+            { name: '👤 Usuario', value: `${interaction.user}`, inline: true },
+            { name: '🛡️ Staff', value: staffName, inline: true },
+            { name: '⭐ Estrellas', value: '⭐'.
+            { name: '⭐ Estrellas', value: '⭐'.repeat(parseInt(stars)), inline: false },
+            { name: '💬 Comentario', value: reason, inline: false },
+            { name: '🎫 Ticket', value: channel.name, inline: true },
+            { name: '📅 Fecha', value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
+          )
+          .setTimestamp();
+
+        const ratingsChannel = interaction.guild.channels.cache.get(RATINGS_CHANNEL_ID);
+        
+        if (ratingsChannel) {
+          await ratingsChannel.send({ embeds: [ratingEmbed] });
+        }
+
+        await interaction.reply({
+          content: '✅ ¡Gracias por tu valoración! El ticket se cerrará en 5 segundos...',
+          embeds: [ratingEmbed]
+        });
+
+        addLog('info', `Ticket ${channel.name} valorado: ${stars}⭐ por ${interaction.user.tag}`);
+
+        setTimeout(async () => {
+          try {
+            const allMessages = await channel.messages.fetch({ limit: 100 });
+            const transcript = allMessages.reverse().map(m => 
+              `[${m.createdAt.toLocaleString('es-ES')}] ${m.author.tag}: ${m.content}`
+            ).join('\n');
+
+            try {
+              await interaction.user.send({
+                content: `📋 **Transcript del ticket ${channel.name}**`,
+                files: [{
+                  attachment: Buffer.from(transcript, 'utf-8'),
+                  name: `ticket-${channel.name}-${Date.now()}.txt`
+                }]
+              });
+            } catch (err) {
+              addLog('warning', 'No se pudo enviar transcript por DM');
+            }
+
+            await channel.delete(`Ticket cerrado por ${interaction.user.tag} - ${stars}⭐`);
+            
+          } catch (error) {
+            addLog('error', `Error al cerrar ticket: ${error.message}`);
+          }
+        }, 5000);
+
+      } catch (error) {
+        addLog('error', `Error al procesar valoración: ${error.message}`);
+        await interaction.reply({
+          content: '❌ Error al procesar la valoración.',
+          flags: 64
+        });
+      }
+      return;
+    }
+
+    // ==================== COMANDO: DESRECLAMAR ====================
+    if (interaction.isChatInputCommand() && interaction.commandName === 'desreclamar') {
+      const channel = interaction.channel;
+      
+      if (!channel.name.startsWith('ticket-')) {
+        return interaction.reply({
+          content: '❌ Este comando solo funciona en canales de tickets.',
+          flags: 64
+        });
+      }
+
+      const staffRoleId = '1469344936620195872';
+      if (!interaction.member.roles.cache.has(staffRoleId)) {
+        return interaction.reply({
+          content: '❌ Solo el staff puede desreclamar tickets.',
+          flags: 64
+        });
+      }
+
+      try {
+        await channel.permissionOverwrites.edit(staffRoleId, {
+          ViewChannel: true,
+          SendMessages: true
+        });
+
+        const embed = new EmbedBuilder()
+          .setColor('#FFA500')
+          .setTitle('🔓 Ticket Liberado')
+          .setDescription(`${interaction.user} ha liberado este ticket.\n\nCualquier staff puede reclamarlo ahora.`)
+          .setTimestamp();
+
+        await channel.send({ embeds: [embed] });
+        
+        await interaction.reply({
+          content: '✅ Ticket liberado correctamente.',
+          flags: 64
+        });
+
+        addLog('info', `Ticket ${channel.name} liberado por ${interaction.user.tag}`);
         
       } catch (error) {
-        console.error('Error al cerrar ticket:', error);
+        addLog('error', `Error desreclamar: ${error.message}`);
+        await interaction.reply({
+          content: '❌ Error al liberar el ticket.',
+          flags: 64
+        });
       }
-    }, 5000);
+      return;
+    }
 
-  } catch (error) {
-    console.error('Error al procesar valoración:', error);
-    await interaction.reply({
-      content: '❌ Error al procesar la valoración.',
-      flags: 64
-    });
-  }
-}
-
-
-    // BOTÓN: INICIAR VERIFICACIÓN
+    // ==================== BOTÓN: INICIAR VERIFICACIÓN ====================
     if (interaction.isButton() && interaction.customId === "verify_start") {
       if (interaction.member.roles.cache.has(VERIFIED_ROLE_ID)) {
         return interaction.reply({
@@ -525,14 +566,14 @@ if (interaction.customId === 'ticket_rating_modal') {
 
   } catch (error) {
     if (error.code === 10062) {
-      addLog('warning', `Interacción expirada: ${interaction.user?.tag}`);
+      addLog('warning', `Interacción expirada`);
       return;
     }
     addLog('error', `Error interacción: ${error.message}`);
   }
 });
 
-// ---------- MENSAJES DIRECTOS (VERIFICACIÓN) ----------
+// ==================== MENSAJES DIRECTOS (VERIFICACIÓN) ====================
 client.on("messageCreate", async message => {
   if (message.author.bot || message.guild) return;
 
@@ -663,7 +704,7 @@ client.on("messageCreate", async message => {
   }
 });
 
-// ---------- BIENVENIDA ----------
+// ==================== EVENTO BIENVENIDA ====================
 client.on("guildMemberAdd", async member => {
   try {
     if (!WELCOME_CHANNEL_ID) return;
@@ -698,69 +739,19 @@ client.on("guildMemberAdd", async member => {
   }
 });
 
-
-// ==================== COMANDO DESRECLAMAR ====================
-// Aquí se registra cuando se cargan los comandos con loadCommands
-
-// Pero también necesita un handler aquí en interactionCreate:
-if (interaction.isChatInputCommand() && interaction.commandName === 'desreclamar') {
-  const channel = interaction.channel;
-  
-  if (!channel.name.startsWith('ticket-')) {
-    return interaction.reply({
-      content: '❌ Este comando solo funciona en canales de tickets.',
-      flags: 64
-    });
-  }
-
-  const staffRoleId = '1469344936620195872';
-  if (!interaction.member.roles.cache.has(staffRoleId)) {
-    return interaction.reply({
-      content: '❌ Solo el staff puede desreclamar tickets.',
-      flags: 64
-    });
-  }
-
-  try {
-    // Restaurar permisos para todos los staff
-    await channel.permissionOverwrites.edit(staffRoleId, {
-      ViewChannel: true,
-      SendMessages: true
-    });
-
-    const embed = new EmbedBuilder()
-      .setColor('#FFA500')
-      .setTitle('🔓 Ticket Liberado')
-      .setDescription(`${interaction.user} ha liberado este ticket.\n\nCualquier staff puede reclamarlo ahora.`)
-      .setTimestamp();
-
-    await channel.send({ embeds: [embed] });
-    
-    await interaction.reply({
-      content: '✅ Ticket liberado correctamente.',
-      flags: 64
-    });
-
-    addLog('info', `Ticket ${channel.name} liberado por ${interaction.user.tag}`);
-    
-  } catch (error) {
-    addLog('error', `Error desreclamar: ${error.message}`);
-    await interaction.reply({
-      content: '❌ Error al liberar el ticket.',
-      flags: 64
-    });
-  }
-  return;
-}
-
 // ==================== LOGIN DISCORD ====================
 if (botEnabled) {
+  console.log('🔍 Ejecutando client.login()...');
+  
   client.login(TOKEN)
     .then(() => {
-      console.log('✅ Bot autenticado correctamente');
+      console.log('✅✅✅ PROMISE DE LOGIN RESUELTA - Bot autenticado correctamente');
     })
     .catch(err => {
-      console.error(`❌ Error en login: ${err.message}`);
+      console.error('❌❌❌ ERROR EN LOGIN:');
+      console.error('Tipo:', err.name);
+      console.error('Código:', err.code);
+      console.error('Mensaje:', err.message);
     });
 } else {
   console.log('⚠️ Bot Discord no iniciado (faltan variables de entorno)');
@@ -770,10 +761,9 @@ if (botEnabled) {
 const app = express();
 
 app.get("/", (req, res) => {
-  res.send(`<h1>Bot funcionando - ${new Date().toLocaleString()}</h1><p>Discord: ${botEnabled ? 'Conectado' : 'Desactivado (faltan variables)'}</p>`);
+  res.send(`<h1>Bot funcionando - ${new Date().toLocaleString('es-ES')}</h1><p>Discord: ${botEnabled ? 'Conectado' : 'Desactivado'}</p>`);
 });
 
-const PORT = 5000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Servidor web en puerto ${PORT}`);
+app.listen(process.env.PORT || 10000, "0.0.0.0", () => {
+  console.log(`✅ Servidor web en puerto ${process.env.PORT || 10000}`);
 });
