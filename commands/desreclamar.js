@@ -11,12 +11,12 @@
     if (!channel.name.startsWith('ticket-')) {
       return interaction.reply({
         content: '❌ Este comando solo funciona en canales de tickets.',
-        flags: 64 // ephemeral
+        flags: 64
       });
     }
 
     // Verificar que el usuario tiene rol de staff
-    const staffRoleId = 'ID_DEL_ROL_STAFF'; // Cambia esto por el ID real
+    const staffRoleId = '1469344936620195872';
     if (!interaction.member.roles.cache.has(staffRoleId)) {
       return interaction.reply({
         content: '❌ Solo el staff puede desreclamar tickets.',
@@ -30,15 +30,6 @@
         ViewChannel: true,
         SendMessages: true
       });
-
-      // Eliminar tag de reclamado si existe
-      const tags = channel.appliedTags || [];
-      const claimedTagId = 'ID_DEL_TAG_CLAIMED'; // Ajusta según tu servidor
-      const newTags = tags.filter(tag => tag !== claimedTagId);
-      
-      if (channel.parent?.type === 15) { // Si es un foro
-        await channel.setAppliedTags(newTags);
-      }
 
       const embed = new EmbedBuilder()
         .setColor('#FFA500')
