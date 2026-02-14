@@ -9,7 +9,7 @@ module.exports = {
   async execute(interaction) {
     const commands = interaction.client.commands;
     const embed = new EmbedBuilder()
-      .setTitle('Comandos de Españoletes RP')
+      .setTitle('Comandos de Gabriel Rufian')
       .setColor('Random')
       .setDescription(commands.size
         ? Array.from(commands.values()).map(c => `**/${c.data.name}** → ${c.data.description}`).join('\n')
