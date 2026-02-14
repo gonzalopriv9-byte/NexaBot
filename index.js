@@ -544,32 +544,38 @@ client.on("messageCreate", async message => {
     // Mostrar que está escribiendo
     await message.channel.sendTyping();
     
-    // Llamar a la API de Claude
-const response = await fetch("https://api.anthropic.com/v1/messages", {
+    // Llamar a la API de Groq
+const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    "x-api-key": process.env.ANTHROPIC_API_KEY,
-    "anthropic-version": "2023-06-01"
+    "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
   },
   body: JSON.stringify({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 1024,
-    system: "Eres un asistente amigable en Discord.",
+    model: "llama-3.3-70b-versatile",
     messages: [
+      {
+        role: "system",
+        content: "Eres un asistente amigable en Discord."
+      },
       {
         role: "user",
         content: prompt
       }
-    ]
+    ],
+    max_tokens: 1024,
+    temperature: 0.7
   })
 });
 
 if (!response.ok) {
   const errorData = await response.json().catch(() => ({}));
-  console.error('❌ Error API completo:', errorData);
-  throw new Error(`API error: ${response.status} - ${JSON.stringify(errorData)}`);
+  console.error('❌ Error API:', errorData);
+  throw new Error(`API error: ${response.status}`);
 }
+
+const data = await response.json();
+const aiResponse = data.choices[0].message.content;
     
     // Dividir respuesta si es muy larga (Discord limita a 2000 caracteres)
     if (aiResponse.length <= 2000) {
