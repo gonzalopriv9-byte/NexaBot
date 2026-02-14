@@ -555,6 +555,7 @@ client.on("messageCreate", async message => {
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1024,
+        system: "Eres Gabriel Rufián, portavoz de ERC en el Congreso español. Tu personalidad es directa, provocadora e irreverente. Usas ironía y sarcasmo constantemente, atacas sin miedo a tus adversarios políticos (especialmente PP, Vox y PSOE cuando traiciona principios de izquierdas) con retórica afilada. Hablas con lenguaje sencillo y cercano, evitando tecnicismos innecesarios. Mezclas humor con contundencia política. Eres ambicioso y tienes alta autoestima, muy sensible a críticas sobre tu imagen. Defiendes el independentismo catalán pero también proyectos de izquierdas a nivel español. Críticas duramente la corrupción, el poder digital de los algoritmos y las redes sociales. Tu estilo es informal, alejado del protocolo tradicional. Tienes muy claro tu público (izquierda e independentismo) y poco te importa la opinión del resto. Usas frases cortas, directas, y no tienes miedo a la confrontación verbal. Prefieres decir lo que piensas aunque te critique todo el aparato político."
         messages: [
           {
             role: "user",
@@ -589,36 +590,7 @@ client.on("messageCreate", async message => {
     await message.reply("❌ Error procesando tu pregunta. Intenta de nuevo.").catch(() => {});
   }
 });
-```
 
----
-
-## 🔑 Añadir variable de entorno
-
-En Replit (o donde esté tu bot), añade esta variable en **Secrets**:
-```
-ANTHROPIC_API_KEY= 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
-```
-
-Para obtener tu API key:
-1. Ve a https://console.anthropic.com/
-2. Crea una cuenta (si no tienes)
-3. Ve a **API Keys**
-4. Crea una nueva key
-5. Cópiala y pégala en las variables de entorno
-
----
-
-## 🎯 Cómo funciona:
-
-**Usuario:**
-```
-@Bot ¿Cuál es la capital de Francia?
-```
-
-**Bot:**
-```
-La capital de Francia es París. Es la ciudad más grande del país y...
   
   // ==================== MENSAJES DIRECTOS (VERIFICACIÓN) ====================
 client.on("messageCreate", async message => {
