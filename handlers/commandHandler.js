@@ -6,7 +6,8 @@ const { REST, Routes } = require("discord.js");
 async function loadCommands(client) {
   const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID } = process.env;
   if (!DISCORD_TOKEN || !CLIENT_ID || !GUILD_ID) {
-    throw new Error("❌ Faltan variables de entorno: DISCORD_TOKEN, CLIENT_ID o GUILD_ID");
+    console.warn("⚠️ Faltan variables de entorno - Comandos no registrados");
+    return;
   }
 
   const commandsPath = path.join(__dirname, "..", "commands");

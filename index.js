@@ -71,9 +71,10 @@ if (!TOKEN) missingVars.push("DISCORD_TOKEN");
 if (!CLIENT_ID) missingVars.push("CLIENT_ID");
 if (!GUILD_ID) missingVars.push("GUILD_ID");
 
+let botEnabled = true;
 if (missingVars.length > 0) {
-  console.error(`❌ Faltan variables: ${missingVars.join(", ")}`);
-  process.exit(1);
+  console.warn(`⚠️ Faltan variables: ${missingVars.join(", ")} - Bot Discord desactivado`);
+  botEnabled = false;
 }
 
 // ----------------- CREAR CLIENTE DISCORD -----------------
@@ -91,8 +92,9 @@ client.commands = new Collection();
 global.maintenanceMode = false;
 const MAINTENANCE_USER_ID = "1352652366330986526";
 
-// Cargar comandos
-loadCommands(client);
+if (botEnabled) {
+  loadCommands(client);
+}
 
 // ==================== EVENTOS DISCORD ====================
 
@@ -575,33 +577,27 @@ client.on("guildMemberAdd", async member => {
   }
 });
 
-// ==================== DEBUGGING ====================
-console.log('🔍 TOKEN detectado:', TOKEN ? 'SÍ (primeros 10 chars: ' + TOKEN.substring(0, 10) + ')' : 'NO');
-console.log('🔍 Intents configurados:', client.options.intents);
-
 // ==================== LOGIN DISCORD ====================
-console.log('🔍 Ejecutando client.login()...');
-
-client.login(TOKEN)
-  .then(() => {
-    console.log('✅✅✅ PROMISE DE LOGIN RESUELTA - Bot autenticado correctamente');
-  })
-  .catch(err => {
-    console.error('❌❌❌ ERROR EN LOGIN:');
-    console.error('Tipo:', err.name);
-    console.error('Código:', err.code);
-    console.error('Mensaje:', err.message);
-    console.error('Stack:', err.stack);
-    process.exit(1);
-  });
+if (botEnabled) {
+  client.login(TOKEN)
+    .then(() => {
+      console.log('✅ Bot autenticado correctamente');
+    })
+    .catch(err => {
+      console.error(`❌ Error en login: ${err.message}`);
+    });
+} else {
+  console.log('⚠️ Bot Discord no iniciado (faltan variables de entorno)');
+}
 
 // ==================== WEB SERVER ====================
 const app = express();
 
 app.get("/", (req, res) => {
-  res.send(`<h1>Bot funcionando - ${new Date().toLocaleString()}</h1>`);
+  res.send(`<h1>Bot funcionando - ${new Date().toLocaleString()}</h1><p>Discord: ${botEnabled ? 'Conectado' : 'Desactivado (faltan variables)'}</p>`);
 });
 
-app.listen(process.env.PORT || 10000, () => {
-  console.log(`✅ Servidor web en puerto ${process.env.PORT || 10000}`);
+const PORT = 5000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Servidor web en puerto ${PORT}`);
 });
