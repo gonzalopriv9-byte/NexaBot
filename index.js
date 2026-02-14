@@ -523,7 +523,104 @@ client.on("interactionCreate", async interaction => {
   }
 });
 
-// ==================== MENSAJES DIRECTOS (VERIFICACIÓN) ====================
+// ==================== MENCIONES CON IA ====================
+client.on("messageCreate", async message => {
+  // Ignorar bots y mensajes sin menciones
+  if (message.author.bot) return;
+  
+  // Verificar si el bot fue mencionado
+  if (!message.mentions.has(client.user.id)) return;
+
+  try {
+    // Extraer el texto después de la mención
+    const prompt = message.content
+      .replace(/<@!?\d+>/g, '') // Eliminar menciones
+      .trim();
+
+    if (!prompt) {
+      return message.reply("❓ Mencióname con una pregunta. Ejemplo: `@Bot ¿Qué es Discord?`");
+    }
+
+    // Mostrar que está escribiendo
+    await message.channel.sendTyping();
+
+    // Llamar a la API de Claude
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const aiResponse = data.content[0].text;
+
+    // Dividir respuesta si es muy larga (Discord limita a 2000 caracteres)
+    if (aiResponse.length <= 2000) {
+      await message.reply(aiResponse);
+    } else {
+      // Dividir en chunks de 2000 caracteres
+      const chunks = aiResponse.match(/[\s\S]{1,2000}/g) || [];
+      for (const chunk of chunks) {
+        await message.channel.send(chunk);
+      }
+    }
+
+    addLog('success', `IA respondió a ${message.author.tag}: "${prompt.substring(0, 50)}..."`);
+
+  } catch (error) {
+    addLog('error', `Error IA: ${error.message}`);
+    await message.reply("❌ Error procesando tu pregunta. Intenta de nuevo.").catch(() => {});
+  }
+});
+```
+
+---
+
+## 🔑 Añadir variable de entorno
+
+En Replit (o donde esté tu bot), añade esta variable en **Secrets**:
+```
+ANTHROPIC_API_KEY= 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
+```
+
+Para obtener tu API key:
+1. Ve a https://console.anthropic.com/
+2. Crea una cuenta (si no tienes)
+3. Ve a **API Keys**
+4. Crea una nueva key
+5. Cópiala y pégala en las variables de entorno
+
+---
+
+## 🎯 Cómo funciona:
+
+**Usuario:**
+```
+@Bot ¿Cuál es la capital de Francia?
+```
+
+**Bot:**
+```
+La capital de Francia es París. Es la ciudad más grande del país y...
+  
+  // ==================== MENSAJES DIRECTOS (VERIFICACIÓN) ====================
 client.on("messageCreate", async message => {
   if (message.author.bot || message.guild) return;
 
