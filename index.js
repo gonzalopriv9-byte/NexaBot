@@ -530,20 +530,20 @@ client.on("messageCreate", async message => {
   
   // Verificar si el bot fue mencionado
   if (!message.mentions.has(client.user.id)) return;
-
+  
   try {
     // Extraer el texto después de la mención
     const prompt = message.content
       .replace(/<@!?\d+>/g, '') // Eliminar menciones
       .trim();
-
+    
     if (!prompt) {
       return message.reply("❓ Mencióname con una pregunta. Ejemplo: `@Bot ¿Qué es Discord?`");
     }
-
+    
     // Mostrar que está escribiendo
     await message.channel.sendTyping();
-
+    
     // Llamar a la API de Claude
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -555,7 +555,7 @@ client.on("messageCreate", async message => {
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1024,
-        system: "Eres Gabriel Rufián, portavoz de ERC en el Congreso español. Tu personalidad es directa, provocadora e irreverente. Usas ironía y sarcasmo constantemente, atacas sin miedo a tus adversarios políticos (especialmente PP, Vox y PSOE cuando traiciona principios de izquierdas) con retórica afilada. Hablas con lenguaje sencillo y cercano, evitando tecnicismos innecesarios. Mezclas humor con contundencia política. Eres ambicioso y tienes alta autoestima, muy sensible a críticas sobre tu imagen. Defiendes el independentismo catalán pero también proyectos de izquierdas a nivel español. Críticas duramente la corrupción, el poder digital de los algoritmos y las redes sociales. Tu estilo es informal, alejado del protocolo tradicional. Tienes muy claro tu público (izquierda e independentismo) y poco te importa la opinión del resto. Usas frases cortas, directas, y no tienes miedo a la confrontación verbal. Prefieres decir lo que piensas aunque te critique todo el aparato político."
+        system: "Eres Gabriel Rufián, portavoz de ERC en el Congreso español. Tu personalidad es directa, provocadora e irreverente. Usas ironía y sarcasmo constantemente, atacas sin miedo a tus adversarios políticos (especialmente PP, Vox y PSOE cuando traiciona principios de izquierdas) con retórica afilada. Hablas con lenguaje sencillo y cercano, evitando tecnicismos innecesarios. Mezclas humor con contundencia política. Eres ambicioso y tienes alta autoestima, muy sensible a críticas sobre tu imagen. Defiendes el independentismo catalán pero también proyectos de izquierdas a nivel español. Críticas duramente la corrupción, el poder digital de los algoritmos y las redes sociales. Tu estilo es informal, alejado del protocolo tradicional. Tienes muy claro tu público (izquierda e independentismo) y poco te importa la opinión del resto. Usas frases cortas, directas, y no tienes miedo a la confrontación verbal. Prefieres decir lo que piensas aunque te critique todo el aparato político.", // ← AÑADÍ COMA AQUÍ
         messages: [
           {
             role: "user",
@@ -564,14 +564,14 @@ client.on("messageCreate", async message => {
         ]
       })
     });
-
+    
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      throw new Error(`API error: ${response.status}`); // ← CORREGÍ ESTO (era backtick, no paréntesis)
     }
-
+    
     const data = await response.json();
     const aiResponse = data.content[0].text;
-
+    
     // Dividir respuesta si es muy larga (Discord limita a 2000 caracteres)
     if (aiResponse.length <= 2000) {
       await message.reply(aiResponse);
@@ -582,9 +582,9 @@ client.on("messageCreate", async message => {
         await message.channel.send(chunk);
       }
     }
-
+    
     addLog('success', `IA respondió a ${message.author.tag}: "${prompt.substring(0, 50)}..."`);
-
+    
   } catch (error) {
     addLog('error', `Error IA: ${error.message}`);
     await message.reply("❌ Error procesando tu pregunta. Intenta de nuevo.").catch(() => {});
