@@ -10,7 +10,8 @@ const {
 // ==================== EMOJIS ANIMADOS ====================
 const EMOJI = {
   CHECK: "<a:Check:1472540340584972509>",
-  CRUZ: "<a:Cruz:1472540885102235689>"
+  CRUZ: "<a:Cruz:1472540885102235689>",
+  CORREO: "<a:correo:1472550293152596000>"
 };
 
 module.exports = {
@@ -46,6 +47,7 @@ module.exports = {
           "4️⃣ Ingresa el código para completar la verificación\n\n" +
           "⚠️ **Importante:** Usa un correo electrónico válido."
         )
+        .setThumbnail("https://cdn.discordapp.com/emojis/1472550293152596000.gif?size=128&quality=lossless")
         .setFooter({ text: "Sistema de verificación" })
         .setTimestamp();
 
