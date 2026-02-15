@@ -7,8 +7,8 @@ const EMOJI = {
   CRUZ: "<a:Cruz:1472540885102235689>"
 };
 
-// ==================== SISTEMA ANTI-DUPLICADOS ====================
-const processingAnnouncements = new Set();
+// ==================== SISTEMA ANTI-DUPLICADOS MEJORADO ====================
+const processingAnnouncements = new Map();
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -27,19 +27,30 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
+    // ✅ VERIFICACIÓN MULTI-NIVEL ANTI-DUPLICADOS
+    const userId = interaction.user.id;
+    const channelId = interaction.channel.id;
+    const uniqueKey = `${userId}-${channelId}`;
+
+    // Verificar si ya respondió
+    if (interaction.replied || interaction.deferred) {
+      console.log(`⚠️ Interacción ya respondida - ABORTANDO`);
+      return;
+    }
+
+    // Verificar si ya está procesando
+    if (processingAnnouncements.has(uniqueKey)) {
+      console.log(`⚠️ Usuario ${userId} ya está enviando anuncio en ${channelId} - IGNORANDO`);
+      return;
+    }
+
+    // Marcar como procesando INMEDIATAMENTE
+    processingAnnouncements.set(uniqueKey, {
+      timestamp: Date.now(),
+      interactionId: interaction.id
+    });
+
     try {
-      // ✅ VERIFICAR SI YA ESTÁ PROCESANDO ESTE COMANDO
-      const commandId = `${interaction.user.id}-${Date.now()}`;
-      if (processingAnnouncements.has(interaction.id)) {
-        console.log(`⚠️ Anuncio ${interaction.id} ya está siendo procesado - IGNORANDO`);
-        return;
-      }
-
-      processingAnnouncements.add(interaction.id);
-
-      // Limpiar después de 10 segundos
-      setTimeout(() => processingAnnouncements.delete(interaction.id), 10000);
-
       // Verificar roles permitidos
       const allowedRoles = ["1469344936620195872"];
       const hasPermission = allowedRoles.some(roleId => 
@@ -47,15 +58,21 @@ module.exports = {
       );
 
       if (!hasPermission) {
-        processingAnnouncements.delete(interaction.id);
+        processingAnnouncements.delete(uniqueKey);
         return interaction.reply({
           content: `${EMOJI.CRUZ} No tienes permiso para usar este comando.`,
-          flags: 64 // ephemeral
+          flags: 64
         });
       }
 
       const msg = interaction.options.getString('mensaje');
       const mostrarEnviante = interaction.options.getBoolean('mostrar_enviante');
+
+      // ✅ RESPONDER INMEDIATAMENTE (sin defer)
+      await interaction.reply({ 
+        content: `${EMOJI.CHECK} Enviando anuncio...`,
+        flags: 64
+      });
 
       // Construir el mensaje del anuncio
       let anuncioTexto = `${EMOJI.MEGAFONO} **ANUNCIO**\n\n${msg}`;
@@ -64,27 +81,35 @@ module.exports = {
         anuncioTexto += `\n\n*Enviado por: ${interaction.user}*`;
       }
 
-      // ✅ RESPONDER PRIMERO CON CONFIRMACIÓN
-      await interaction.reply({ 
-        content: `${EMOJI.CHECK} Anuncio enviado correctamente`,
-        flags: 64 // ephemeral
-      });
-
-      // ✅ LUEGO ENVIAR EL ANUNCIO
+      // Enviar el anuncio
       await interaction.channel.send(anuncioTexto);
 
-    } catch (error) {
-      console.error('Error en anunciar:', error);
+      // Actualizar confirmación
+      await interaction.editReply({
+        content: `${EMOJI.CHECK} Anuncio enviado correctamente`
+      });
 
-      // Limpiar el flag
-      processingAnnouncements.delete(interaction.id);
+      console.log(`✅ Anuncio enviado por ${interaction.user.tag} en #${interaction.channel.name}`);
+
+    } catch (error) {
+      console.error('❌ Error en anunciar:', error);
 
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: `${EMOJI.CRUZ} Error al enviar el anuncio.`,
-          flags: 64 // ephemeral
+          flags: 64
+        }).catch(() => {});
+      } else {
+        await interaction.editReply({
+          content: `${EMOJI.CRUZ} Error al enviar el anuncio.`
         }).catch(() => {});
       }
+    } finally {
+      // Limpiar después de 5 segundos
+      setTimeout(() => {
+        processingAnnouncements.delete(uniqueKey);
+        console.log(`🧹 Limpiado flag de anuncio para ${userId}`);
+      }, 5000);
     }
   }
 };
