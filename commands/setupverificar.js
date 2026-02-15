@@ -1,4 +1,3 @@
-
 const {
   SlashCommandBuilder,
   PermissionFlagsBits,
@@ -7,6 +6,12 @@ const {
   ButtonStyle,
   EmbedBuilder
 } = require("discord.js");
+
+// ==================== EMOJIS ANIMADOS ====================
+const EMOJI = {
+  CHECK: "<a:Check:1472540340584972509>",
+  CRUZ: "<a:Cruz:1472540885102235689>"
+};
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -23,7 +28,7 @@ module.exports = {
 
     if (!hasPermission) {
       return interaction.reply({
-        content: "❌ No tienes permiso para usar este comando.",
+        content: `${EMOJI.CRUZ} No tienes permiso para usar este comando.`,
         ephemeral: true
       });
     }
@@ -31,7 +36,7 @@ module.exports = {
     // ✅ RESPONDER INMEDIATAMENTE SIN DEFER
     const embed = new EmbedBuilder()
       .setColor("#00FF00")
-      .setTitle("✅ Verificación de Usuario")
+      .setTitle(`${EMOJI.CHECK} Verificación de Usuario`)
       .setDescription(
         "Para acceder al servidor completo, necesitas verificar tu correo electrónico.\n\n" +
         "**¿Cómo funciona?**\n" +
