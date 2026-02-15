@@ -19,14 +19,6 @@ const sgMail = require("@sendgrid/mail");
 const fetch = require("node-fetch");
 const { saveDNI, generateDNINumber, getDNI, hasDNI, deleteDNI } = require("./utils/database");
 
-// ==================== EMOJIS ANIMADOS ====================
-const EMOJI = {
-  MEGAFONO: "<a:Megafono:1472541640970211523>",
-  TICKET: "<a:Ticket:1472541437470965942>",
-  CRUZ: "<a:Cruz:1472540885102235689>",
-  CHECK: "<a:Check:1472540340584972509>"
-};
-
 // ==================== DEBUGGING ====================
 console.log('🔍 TOKEN detectado:', process.env.DISCORD_TOKEN ? 'SÍ (primeros 10 chars: ' + process.env.DISCORD_TOKEN.substring(0, 10) + ')' : 'NO');
 
@@ -51,6 +43,15 @@ const TRABAJOS = {
   medico: { roleId: "1472275537308286976", emoji: "⚕️", nombre: "Médico" },
   bombero: { roleId: "1472275475895419073", emoji: "🚒", nombre: "Bombero" },
   mecanico: { roleId: "1472275662470385794", emoji: "🔧", nombre: "Mecánico (ADAC)" }
+};
+
+// ==================== EMOJIS ANIMADOS ====================
+const EMOJI = {
+  MEGAFONO: "<a:Megafono:1472541640970211523>",
+  TICKET: "<a:Ticket:1472541437470965942>",
+  CRUZ: "<a:Cruz:1472540885102235689>",
+  CHECK: "<a:Check:1472540340584972509>",
+  CORREO: "<a:correo:1472550293152596000>"
 };
 
 // ==================== CONFIGURAR SENDGRID ====================
@@ -147,7 +148,7 @@ client.on("interactionCreate", async interaction => {
       if (global.maintenanceMode && interaction.user.id !== MAINTENANCE_USER_ID) {
         return interaction.reply({
           content: "⚠️ El bot está en mantenimiento.",
-          ephemeral: true
+          flags: 64
         });
       }
 
@@ -162,7 +163,7 @@ client.on("interactionCreate", async interaction => {
         if (!interaction.replied && !interaction.deferred) {
           interaction.reply({ 
             content: `${EMOJI.CRUZ} Error ejecutando el comando`, 
-            ephemeral: true 
+            flags: 64
           }).catch(() => {});
         }
       }
@@ -200,7 +201,7 @@ client.on("interactionCreate", async interaction => {
 
     // ==================== MODAL: CREAR TICKET ====================
     if (interaction.isModalSubmit() && interaction.customId === "ticket_modal") {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 });
 
       const robloxUser = interaction.fields.getTextInputValue("roblox_user");
       const reason = interaction.fields.getTextInputValue("ticket_reason");
@@ -277,7 +278,7 @@ client.on("interactionCreate", async interaction => {
 
     // ==================== MODAL: CREAR DNI ====================
     if (interaction.isModalSubmit() && interaction.customId === "dni_modal") {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 });
 
       try {
         const nombreCompleto = interaction.fields.getTextInputValue("nombre_completo");
@@ -362,7 +363,7 @@ client.on("interactionCreate", async interaction => {
       if (!hasStaffRole) {
         return interaction.reply({
           content: `${EMOJI.CRUZ} Solo el staff puede reclamar tickets.`,
-          ephemeral: true
+          flags: 64
         });
       }
 
@@ -439,7 +440,7 @@ client.on("interactionCreate", async interaction => {
       if (interaction.user.id !== ticketOwnerId && !interaction.member.roles.cache.has(staffRoleId)) {
         return interaction.reply({
           content: `${EMOJI.CRUZ} Solo el creador del ticket o el staff puede cerrarlo.`,
-          ephemeral: true
+          flags: 64
         });
       }
 
@@ -482,7 +483,7 @@ client.on("interactionCreate", async interaction => {
       if (!/^[1-5]$/.test(stars)) {
         return interaction.reply({
           content: `${EMOJI.CRUZ} Las estrellas deben ser un número entre 1 y 5.`,
-          ephemeral: true
+          flags: 64
         });
       }
 
@@ -559,7 +560,7 @@ client.on("interactionCreate", async interaction => {
         addLog('error', `Error al procesar valoración: ${error.message}`);
         await interaction.reply({
           content: `${EMOJI.CRUZ} Error al procesar la valoración.`,
-          ephemeral: true
+          flags: 64
         });
       }
       return;
@@ -583,12 +584,12 @@ client.on("interactionCreate", async interaction => {
         if (trabajoActual) {
           await interaction.reply({
             content: `${EMOJI.CHECK} Has renunciado a tu trabajo de **${trabajoActual.nombre}**.`,
-            ephemeral: true
+            flags: 64
           });
         } else {
           await interaction.reply({
             content: `${EMOJI.CRUZ} No tienes ningún trabajo actualmente.`,
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -613,7 +614,7 @@ client.on("interactionCreate", async interaction => {
         if (interaction.member.roles.cache.has(trabajo.roleId)) {
           return interaction.reply({
             content: `ℹ️ Ya eres **${trabajo.nombre}**.`,
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -622,7 +623,7 @@ client.on("interactionCreate", async interaction => {
 
         await interaction.reply({
           content: `${EMOJI.CHECK} ${trabajo.emoji} ¡Felicidades! Ahora eres **${trabajo.nombre}**.`,
-          ephemeral: true
+          flags: 64
         });
 
         addLog('info', `${interaction.user.tag} ahora es ${trabajo.nombre}`);
@@ -634,7 +635,7 @@ client.on("interactionCreate", async interaction => {
         console.error("Error asignando trabajo:", error);
         await interaction.reply({
           content: `${EMOJI.CRUZ} Error al asignar el trabajo.`,
-          ephemeral: true
+          flags: 64
         });
       }
       return;
@@ -645,14 +646,14 @@ client.on("interactionCreate", async interaction => {
       if (interaction.member.roles.cache.has(VERIFIED_ROLE_ID)) {
         return interaction.reply({
           content: `${EMOJI.CHECK} Ya estás verificado.`,
-          ephemeral: true
+          flags: 64
         });
       }
 
       try {
         await interaction.reply({
           content: `${EMOJI.CHECK} Te he enviado un MD.`,
-          ephemeral: true
+          flags: 64
         });
 
         const dmEmbed = new EmbedBuilder()
@@ -904,6 +905,7 @@ client.on("messageCreate", async message => {
           .setColor("#00FF00")
           .setTitle(`${EMOJI.CHECK} Código Enviado`)
           .setDescription(`Código enviado a **${email}**. Revisa spam.\n\nEnvía el código de 6 dígitos.`)
+          .setThumbnail("https://cdn.discordapp.com/emojis/1472550293152596000.gif?size=128&quality=lossless")
           .setTimestamp();
 
         await message.reply({ embeds: [embed] });
