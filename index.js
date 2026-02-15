@@ -978,7 +978,7 @@ client.on("guildMemberAdd", async member => {
         { name: "📊 Miembro", value: `#${member.guild.memberCount}`, inline: true },
         { name: "📅 Creado", value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true }
       )
-      .setImage("https://raw.githubusercontent.com/gonzalopriv9-byte/EspanoletesBOT.1/main/assets/bienvenida.png")
+      .setImage("https://raw.githubusercontent.com/gonzalopriv9-byte/GABRIEL-RUFIAN/main/assets/ChatGPT_Image_13_feb_2026_19_27_59.webp")
       .setTimestamp();
 
     await channel.send({
