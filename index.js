@@ -19,6 +19,14 @@ const sgMail = require("@sendgrid/mail");
 const fetch = require("node-fetch");
 const { saveDNI, generateDNINumber, getDNI, hasDNI, deleteDNI } = require("./utils/database");
 
+// ==================== EMOJIS ANIMADOS ====================
+const EMOJI = {
+  MEGAFONO: "<a:Megafono:1472541640970211523>",
+  TICKET: "<a:Ticket:1472541437470965942>",
+  CRUZ: "<a:Cruz:1472540885102235689>",
+  CHECK: "<a:Check:1472540340584972509>"
+};
+
 // ==================== DEBUGGING ====================
 console.log('🔍 TOKEN detectado:', process.env.DISCORD_TOKEN ? 'SÍ (primeros 10 chars: ' + process.env.DISCORD_TOKEN.substring(0, 10) + ')' : 'NO');
 
@@ -64,11 +72,11 @@ function addLog(type, message) {
     minute: '2-digit',
     second: '2-digit'
   });
-  
+
   const logEntry = { timestamp, type, message };
   logs.push(logEntry);
   if (logs.length > MAX_LOGS) logs.shift();
-  
+
   const emoji = {
     info: '📋',
     success: '✅',
@@ -113,10 +121,10 @@ if (botEnabled) {
 client.once("ready", () => {
   addLog('success', `🎉 Bot conectado: ${client.user.tag}`);
   console.log('🔍 Intents configurados:', client.options.intents);
-  
+
   client.user.setPresence({
     status: "online",
-    activities: [{ name: "Besandome con Vito💏", type: 0 }]
+    activities: [{ name: "Salvando Cataluña", type: 0 }]
   });
 });
 
@@ -132,7 +140,7 @@ client.on("warn", info => {
 // ==================== INTERACTION CREATE ====================
 client.on("interactionCreate", async interaction => {
   console.log(`📨 Interacción recibida: ${interaction.customId || interaction.commandName}`);
-  
+
   try {
     // ==================== COMANDOS SLASH ====================
     if (interaction.isChatInputCommand()) {
@@ -153,7 +161,7 @@ client.on("interactionCreate", async interaction => {
         addLog('error', `Error /${interaction.commandName}: ${err.message}`);
         if (!interaction.replied && !interaction.deferred) {
           interaction.reply({ 
-            content: "❌ Error ejecutando el comando", 
+            content: `${EMOJI.CRUZ} Error ejecutando el comando`, 
             ephemeral: true 
           }).catch(() => {});
         }
@@ -165,7 +173,7 @@ client.on("interactionCreate", async interaction => {
     if (interaction.isButton() && interaction.customId === "open_ticket") {
       const modal = new ModalBuilder()
         .setCustomId("ticket_modal")
-        .setTitle("📋 Crear Ticket");
+        .setTitle(`${EMOJI.TICKET} Crear Ticket`);
 
       const robloxInput = new TextInputBuilder()
         .setCustomId("roblox_user")
@@ -231,7 +239,7 @@ client.on("interactionCreate", async interaction => {
 
         const embed = new EmbedBuilder()
           .setColor("#00BFFF")
-          .setTitle("🎫 Nuevo Ticket")
+          .setTitle(`${EMOJI.TICKET} Nuevo Ticket`)
           .setDescription(`**Roblox:** ${robloxUser}\n\n**Motivo:**\n${reason}`)
           .setFooter({ text: `Por ${interaction.user.tag}` })
           .setTimestamp();
@@ -254,14 +262,14 @@ client.on("interactionCreate", async interaction => {
         });
 
         await interaction.editReply({
-          content: `✅ Ticket creado: ${ticketChannel}`
+          content: `${EMOJI.CHECK} Ticket creado: ${ticketChannel}`
         });
 
         addLog('success', `Ticket creado por ${interaction.user.tag}`);
       } catch (error) {
         addLog('error', `Error ticket: ${error.message}`);
         await interaction.editReply({
-          content: "❌ Error al crear el ticket."
+          content: `${EMOJI.CRUZ} Error al crear el ticket.`
         });
       }
       return;
@@ -282,7 +290,7 @@ client.on("interactionCreate", async interaction => {
         const fechaRegex = /^\d{2}\/\d{2}\/\d{4}$/;
         if (!fechaRegex.test(fechaNacimiento)) {
           return interaction.editReply({
-            content: "❌ Formato de fecha inválido. Usa DD/MM/AAAA (ejemplo: 15/03/1995)"
+            content: `${EMOJI.CRUZ} Formato de fecha inválido. Usa DD/MM/AAAA (ejemplo: 15/03/1995)`
           });
         }
 
@@ -290,7 +298,7 @@ client.on("interactionCreate", async interaction => {
         const telefonoRegex = /^\d{9,15}$/;
         if (!telefonoRegex.test(telefono.replace(/\s/g, ''))) {
           return interaction.editReply({
-            content: "❌ Formato de teléfono inválido. Debe contener solo números (9-15 dígitos)."
+            content: `${EMOJI.CRUZ} Formato de teléfono inválido. Debe contener solo números (9-15 dígitos).`
           });
         }
 
@@ -313,7 +321,7 @@ client.on("interactionCreate", async interaction => {
         if (success) {
           const embed = new EmbedBuilder()
             .setColor("#00FF00")
-            .setTitle("✅ DNI Creado Exitosamente")
+            .setTitle(`${EMOJI.CHECK} DNI Creado Exitosamente`)
             .setDescription(`Tu DNI ha sido registrado en la base de datos.`)
             .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 128 }))
             .addFields(
@@ -333,13 +341,13 @@ client.on("interactionCreate", async interaction => {
           addLog('success', `DNI creado para ${interaction.user.tag}: ${numeroDNI}`);
         } else {
           await interaction.editReply({
-            content: "❌ Error al guardar el DNI. Intenta de nuevo."
+            content: `${EMOJI.CRUZ} Error al guardar el DNI. Intenta de nuevo.`
           });
         }
       } catch (error) {
         addLog('error', `Error creando DNI: ${error.message}`);
         await interaction.editReply({
-          content: "❌ Hubo un error procesando tu DNI. Verifica que los datos sean correctos."
+          content: `${EMOJI.CRUZ} Hubo un error procesando tu DNI. Verifica que los datos sean correctos.`
         });
       }
       return;
@@ -353,13 +361,13 @@ client.on("interactionCreate", async interaction => {
 
       if (!hasStaffRole) {
         return interaction.reply({
-          content: "❌ Solo el staff puede reclamar tickets.",
+          content: `${EMOJI.CRUZ} Solo el staff puede reclamar tickets.`,
           ephemeral: true
         });
       }
 
       await interaction.reply({
-        content: `✅ ${interaction.user} ha reclamado este ticket.`
+        content: `${EMOJI.CHECK} ${interaction.user} ha reclamado este ticket.`
       });
 
       try {
@@ -427,10 +435,10 @@ client.on("interactionCreate", async interaction => {
       const channel = interaction.channel;
       const ticketOwnerId = channel.topic;
       const staffRoleId = '1469344936620195872';
-      
+
       if (interaction.user.id !== ticketOwnerId && !interaction.member.roles.cache.has(staffRoleId)) {
         return interaction.reply({
-          content: '❌ Solo el creador del ticket o el staff puede cerrarlo.',
+          content: `${EMOJI.CRUZ} Solo el creador del ticket o el staff puede cerrarlo.`,
           ephemeral: true
         });
       }
@@ -473,17 +481,17 @@ client.on("interactionCreate", async interaction => {
 
       if (!/^[1-5]$/.test(stars)) {
         return interaction.reply({
-          content: '❌ Las estrellas deben ser un número entre 1 y 5.',
+          content: `${EMOJI.CRUZ} Las estrellas deben ser un número entre 1 y 5.`,
           ephemeral: true
         });
       }
 
       const channel = interaction.channel;
       const staffRoleId = '1469344936620195872';
-      
+
       try {
         const messages = await channel.messages.fetch({ limit: 100 });
-        
+
         let staffMember = null;
         for (const msg of messages.values()) {
           if (msg.author.bot) continue;
@@ -509,13 +517,13 @@ client.on("interactionCreate", async interaction => {
           .setTimestamp();
 
         const ratingsChannel = interaction.guild.channels.cache.get(RATINGS_CHANNEL_ID);
-        
+
         if (ratingsChannel) {
           await ratingsChannel.send({ embeds: [ratingEmbed] });
         }
 
         await interaction.reply({
-          content: '✅ ¡Gracias por tu valoración! El ticket se cerrará en 5 segundos...',
+          content: `${EMOJI.CHECK} ¡Gracias por tu valoración! El ticket se cerrará en 5 segundos...`,
           embeds: [ratingEmbed]
         });
 
@@ -541,7 +549,7 @@ client.on("interactionCreate", async interaction => {
             }
 
             await channel.delete(`Ticket cerrado por ${interaction.user.tag} - ${stars}⭐`);
-            
+
           } catch (error) {
             addLog('error', `Error al cerrar ticket: ${error.message}`);
           }
@@ -550,7 +558,7 @@ client.on("interactionCreate", async interaction => {
       } catch (error) {
         addLog('error', `Error al procesar valoración: ${error.message}`);
         await interaction.reply({
-          content: '❌ Error al procesar la valoración.',
+          content: `${EMOJI.CRUZ} Error al procesar la valoración.`,
           ephemeral: true
         });
       }
@@ -574,12 +582,12 @@ client.on("interactionCreate", async interaction => {
 
         if (trabajoActual) {
           await interaction.reply({
-            content: `✅ Has renunciado a tu trabajo de **${trabajoActual.nombre}**.`,
+            content: `${EMOJI.CHECK} Has renunciado a tu trabajo de **${trabajoActual.nombre}**.`,
             ephemeral: true
           });
         } else {
           await interaction.reply({
-            content: "❌ No tienes ningún trabajo actualmente.",
+            content: `${EMOJI.CRUZ} No tienes ningún trabajo actualmente.`,
             ephemeral: true
           });
         }
@@ -613,7 +621,7 @@ client.on("interactionCreate", async interaction => {
         await interaction.member.roles.add(trabajo.roleId);
 
         await interaction.reply({
-          content: `${trabajo.emoji} ¡Felicidades! Ahora eres **${trabajo.nombre}**.`,
+          content: `${EMOJI.CHECK} ${trabajo.emoji} ¡Felicidades! Ahora eres **${trabajo.nombre}**.`,
           ephemeral: true
         });
 
@@ -625,7 +633,7 @@ client.on("interactionCreate", async interaction => {
       } catch (error) {
         console.error("Error asignando trabajo:", error);
         await interaction.reply({
-          content: "❌ Error al asignar el trabajo.",
+          content: `${EMOJI.CRUZ} Error al asignar el trabajo.`,
           ephemeral: true
         });
       }
@@ -636,14 +644,14 @@ client.on("interactionCreate", async interaction => {
     if (interaction.isButton() && interaction.customId === "verify_start") {
       if (interaction.member.roles.cache.has(VERIFIED_ROLE_ID)) {
         return interaction.reply({
-          content: "✅ Ya estás verificado.",
+          content: `${EMOJI.CHECK} Ya estás verificado.`,
           ephemeral: true
         });
       }
 
       try {
         await interaction.reply({
-          content: "✅ Te he enviado un MD.",
+          content: `${EMOJI.CHECK} Te he enviado un MD.`,
           ephemeral: true
         });
 
@@ -670,7 +678,7 @@ client.on("interactionCreate", async interaction => {
       } catch (error) {
         addLog('error', `Error MD: ${error.message}`);
         return interaction.editReply({
-          content: "❌ No puedo enviarte mensajes directos."
+          content: `${EMOJI.CRUZ} No puedo enviarte mensajes directos.`
         }).catch(() => {});
       }
       return;
@@ -690,7 +698,7 @@ async function actualizarPanelTrabajos(interaction) {
   try {
     const guild = interaction.guild;
     const contadores = {};
-    
+
     for (const [key, trabajo] of Object.entries(TRABAJOS)) {
       const role = guild.roles.cache.get(trabajo.roleId);
       contadores[key] = role ? role.members.size : 0;
@@ -752,27 +760,42 @@ async function actualizarPanelTrabajos(interaction) {
   }
 }
 
-// ==================== MANEJADOR DE MENSAJES (IA + VERIFICACIÓN) ====================
+// ==================== SISTEMA ANTI-DUPLICADOS PARA IA ====================
 const processedMessages = new Set();
+const activeAIProcessing = new Map();
 
+// ==================== MANEJADOR DE MENSAJES (IA + VERIFICACIÓN) ====================
 client.on("messageCreate", async message => {
   // Ignorar bots
   if (message.author.bot) return;
 
   // Evitar procesar el mismo mensaje múltiples veces
-  if (processedMessages.has(message.id)) return;
+  if (processedMessages.has(message.id)) {
+    console.log(`⚠️ Mensaje ${message.id} ya fue procesado - IGNORANDO`);
+    return;
+  }
+
   processedMessages.add(message.id);
-  
+
   // Limpiar caché cada 30 segundos
   setTimeout(() => processedMessages.delete(message.id), 30000);
 
   // --- MENCIONES CON IA (solo en servidores) ---
   if (message.guild && message.mentions.has(client.user.id)) {
+    // Verificar si ya está procesando este mensaje
+    if (activeAIProcessing.has(message.id)) {
+      console.log(`⚠️ Mensaje ${message.id} ya está siendo procesado por IA - IGNORANDO`);
+      return;
+    }
+
+    activeAIProcessing.set(message.id, true);
+
     try {
       const prompt = message.content.replace(/<@!?\d+>/g, '').trim();
-      
+
       if (!prompt) {
-        return message.reply("❓ Mencióname con una pregunta.");
+        activeAIProcessing.delete(message.id);
+        return message.reply(`${EMOJI.MEGAFONO} Mencióname con una pregunta.`);
       }
 
       await message.channel.sendTyping();
@@ -819,8 +842,13 @@ client.on("messageCreate", async message => {
       addLog('success', `IA respondió a ${message.author.tag}: "${prompt.substring(0, 50)}..."`);
     } catch (error) {
       addLog('error', `Error IA: ${error.message}`);
-      await message.reply("❌ Error procesando tu pregunta.").catch(() => {});
+      await message.reply(`${EMOJI.CRUZ} Error procesando tu pregunta.`).catch(() => {});
+    } finally {
+      // Limpiar el flag después de 5 segundos
+      setTimeout(() => activeAIProcessing.delete(message.id), 5000);
     }
+
+    // IMPORTANTE: Return para evitar que continúe procesando
     return;
   }
 
@@ -832,7 +860,7 @@ client.on("messageCreate", async message => {
     const timeElapsed = Date.now() - userData.timestamp;
     if (timeElapsed > 5 * 60 * 1000) {
       verificationCodes.delete(message.author.id);
-      return message.reply("❌ Tiempo expirado. Intenta de nuevo.");
+      return message.reply(`${EMOJI.CRUZ} Tiempo expirado. Intenta de nuevo.`);
     }
 
     try {
@@ -842,7 +870,7 @@ client.on("messageCreate", async message => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
         if (!emailRegex.test(email)) {
-          return message.reply("❌ Email inválido.");
+          return message.reply(`${EMOJI.CRUZ} Email inválido.`);
         }
 
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -874,7 +902,7 @@ client.on("messageCreate", async message => {
 
         const embed = new EmbedBuilder()
           .setColor("#00FF00")
-          .setTitle("✅ Código Enviado")
+          .setTitle(`${EMOJI.CHECK} Código Enviado`)
           .setDescription(`Código enviado a **${email}**. Revisa spam.\n\nEnvía el código de 6 dígitos.`)
           .setTimestamp();
 
@@ -887,14 +915,14 @@ client.on("messageCreate", async message => {
         const inputCode = message.content.trim();
 
         if (!/^\d{6}$/.test(inputCode)) {
-          return message.reply("❌ Código inválido. 6 dígitos.");
+          return message.reply(`${EMOJI.CRUZ} Código inválido. 6 dígitos.`);
         }
 
         if (inputCode === userData.code) {
           const guild = client.guilds.cache.get(userData.guildId);
           if (!guild) {
             verificationCodes.delete(message.author.id);
-            return message.reply("❌ Servidor no encontrado.");
+            return message.reply(`${EMOJI.CRUZ} Servidor no encontrado.`);
           }
 
           const member = await guild.members.fetch(message.author.id);
@@ -902,7 +930,7 @@ client.on("messageCreate", async message => {
 
           if (!role) {
             verificationCodes.delete(message.author.id);
-            return message.reply("❌ Rol no encontrado.");
+            return message.reply(`${EMOJI.CRUZ} Rol no encontrado.`);
           }
 
           await member.roles.add(role);
@@ -910,7 +938,7 @@ client.on("messageCreate", async message => {
 
           const embed = new EmbedBuilder()
             .setColor("#00FF00")
-            .setTitle("✅ Verificación Completada")
+            .setTitle(`${EMOJI.CHECK} Verificación Completada`)
             .setDescription(`¡Felicidades **${message.author.username}**!\n\nVerificado exitosamente.`)
             .setFooter({ text: guild.name })
             .setTimestamp();
@@ -918,13 +946,13 @@ client.on("messageCreate", async message => {
           await message.reply({ embeds: [embed] });
           addLog('success', `Usuario verificado: ${message.author.tag}`);
         } else {
-          await message.reply("❌ Código incorrecto.");
+          await message.reply(`${EMOJI.CRUZ} Código incorrecto.`);
         }
       }
     } catch (error) {
       addLog('error', `Error verificación: ${error.message}`);
       verificationCodes.delete(message.author.id);
-      await message.reply("❌ Error. Intenta de nuevo.").catch(() => {});
+      await message.reply(`${EMOJI.CRUZ} Error. Intenta de nuevo.`).catch(() => {});
     }
   }
 });
@@ -942,7 +970,7 @@ client.on("guildMemberAdd", async member => {
 
     const embed = new EmbedBuilder()
       .setColor("#FFD700")
-      .setTitle("🎉 ¡BIENVENIDO!")
+      .setTitle(`${EMOJI.MEGAFONO} ¡BIENVENIDO!`)
       .setDescription(`**${member.user.username}** se unió al servidor`)
       .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
       .addFields(
@@ -954,7 +982,7 @@ client.on("guildMemberAdd", async member => {
       .setTimestamp();
 
     await channel.send({
-      content: `🎉 **¡Bienvenido ${member}!** 🎉`,
+      content: `${EMOJI.MEGAFONO} **¡Bienvenido ${member}!** ${EMOJI.MEGAFONO}`,
       embeds: [embed]
     });
 
@@ -967,7 +995,7 @@ client.on("guildMemberAdd", async member => {
 // ==================== LOGIN DISCORD ====================
 if (botEnabled) {
   console.log('🔍 Ejecutando client.login()...');
-  
+
   client.login(TOKEN)
     .then(() => {
       console.log('✅✅✅ PROMISE DE LOGIN RESUELTA - Bot autenticado correctamente');
