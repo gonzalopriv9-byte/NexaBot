@@ -7,6 +7,9 @@ const EMOJI = {
   CRUZ: "<a:Cruz:1472540885102235689>"
 };
 
+// ==================== SISTEMA ANTI-DUPLICADOS ====================
+const processingAnnouncements = new Set();
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('anunciar')
@@ -25,6 +28,18 @@ module.exports = {
 
   async execute(interaction) {
     try {
+      // ✅ VERIFICAR SI YA ESTÁ PROCESANDO ESTE COMANDO
+      const commandId = `${interaction.user.id}-${Date.now()}`;
+      if (processingAnnouncements.has(interaction.id)) {
+        console.log(`⚠️ Anuncio ${interaction.id} ya está siendo procesado - IGNORANDO`);
+        return;
+      }
+
+      processingAnnouncements.add(interaction.id);
+
+      // Limpiar después de 10 segundos
+      setTimeout(() => processingAnnouncements.delete(interaction.id), 10000);
+
       // Verificar roles permitidos
       const allowedRoles = ["1469344936620195872"];
       const hasPermission = allowedRoles.some(roleId => 
@@ -32,6 +47,7 @@ module.exports = {
       );
 
       if (!hasPermission) {
+        processingAnnouncements.delete(interaction.id);
         return interaction.reply({
           content: `${EMOJI.CRUZ} No tienes permiso para usar este comando.`,
           flags: 64 // ephemeral
@@ -48,16 +64,20 @@ module.exports = {
         anuncioTexto += `\n\n*Enviado por: ${interaction.user}*`;
       }
 
-      // Enviar el anuncio primero
-      await interaction.channel.send(anuncioTexto);
-
-      // Confirmar al usuario
+      // ✅ RESPONDER PRIMERO CON CONFIRMACIÓN
       await interaction.reply({ 
         content: `${EMOJI.CHECK} Anuncio enviado correctamente`,
         flags: 64 // ephemeral
       });
+
+      // ✅ LUEGO ENVIAR EL ANUNCIO
+      await interaction.channel.send(anuncioTexto);
+
     } catch (error) {
       console.error('Error en anunciar:', error);
+
+      // Limpiar el flag
+      processingAnnouncements.delete(interaction.id);
 
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
