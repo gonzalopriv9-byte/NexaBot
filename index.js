@@ -124,7 +124,7 @@ client.once("ready", () => {
 
   client.user.setPresence({
     status: "online",
-    activities: [{ name: "Salvando Cataluña", type: 0 }]
+    activities: [{ name: "Besandome con Vito💏", type: 0 }]
   });
 });
 
@@ -173,7 +173,7 @@ client.on("interactionCreate", async interaction => {
     if (interaction.isButton() && interaction.customId === "open_ticket") {
       const modal = new ModalBuilder()
         .setCustomId("ticket_modal")
-        .setTitle(`${EMOJI.TICKET} Crear Ticket`);
+        .setTitle("📋 Crear Ticket");
 
       const robloxInput = new TextInputBuilder()
         .setCustomId("roblox_user")
@@ -445,7 +445,7 @@ client.on("interactionCreate", async interaction => {
 
       const modal = new ModalBuilder()
         .setCustomId('ticket_rating_modal')
-        .setTitle('Valoración del Ticket');
+        .setTitle('⭐ Valoración del Ticket');
 
       const starsInput = new TextInputBuilder()
         .setCustomId('rating_stars')
@@ -978,7 +978,7 @@ client.on("guildMemberAdd", async member => {
         { name: "📊 Miembro", value: `#${member.guild.memberCount}`, inline: true },
         { name: "📅 Creado", value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true }
       )
-      .setImage("https://raw.githubusercontent.com/gonzalopriv9-byte/GABRIEL-RUFIAN/main/assets/ChatGPT_Image_13_feb_2026_19_27_59.webp")
+      .setImage("https://raw.githubusercontent.com/gonzalopriv9-byte/EspanoletesBOT.1/main/assets/bienvenida.png")
       .setTimestamp();
 
     await channel.send({
