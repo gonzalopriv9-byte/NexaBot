@@ -18,6 +18,7 @@ const { loadCommands } = require("./handlers/commandHandler");
 const sgMail = require("@sendgrid/mail");
 const fetch = require("node-fetch");
 const { saveDNI, generateDNINumber, getDNI, hasDNI, deleteDNI } = require("./utils/database");
+const { loadGuildConfig, isSystemEnabled } = require("./utils/configManager");
 
 // ==================== DEBUGGING ====================
 console.log('🔍 TOKEN detectado:', process.env.DISCORD_TOKEN ? 'SÍ (primeros 10 chars: ' + process.env.DISCORD_TOKEN.substring(0, 10) + ')' : 'NO');
@@ -25,25 +26,9 @@ console.log('🔍 TOKEN detectado:', process.env.DISCORD_TOKEN ? 'SÍ (primeros 
 // ==================== VARIABLES BOT ====================
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
-const WELCOME_CHANNEL_ID = process.env.WELCOME_CHANNEL_ID;
-
-// ==================== VARIABLES TICKETS ====================
-const TICKET_CATEGORY_ID = "1471929885512695972";
-const STAFF_ROLES = ["1469344936620195872"];
-const RATINGS_CHANNEL_ID = "1469412480290914497";
 
 // ==================== VARIABLES VERIFICACIÓN ====================
-const VERIFIED_ROLE_ID = "1471930183509475388";
 const verificationCodes = new Map();
-
-// ==================== VARIABLES TRABAJOS ====================
-const TRABAJOS = {
-  policia: { roleId: "1472275390977282101", emoji: "👮", nombre: "Policía" },
-  medico: { roleId: "1472275537308286976", emoji: "⚕️", nombre: "Médico" },
-  bombero: { roleId: "1472275475895419073", emoji: "🚒", nombre: "Bombero" },
-  mecanico: { roleId: "1472275662470385794", emoji: "🔧", nombre: "Mecánico (ADAC)" }
-};
 
 // ==================== EMOJIS ANIMADOS ====================
 const EMOJI = {
@@ -91,7 +76,6 @@ function addLog(type, message) {
 const missingVars = [];
 if (!TOKEN) missingVars.push("DISCORD_TOKEN");
 if (!CLIENT_ID) missingVars.push("CLIENT_ID");
-if (!GUILD_ID) missingVars.push("GUILD_ID");
 
 let botEnabled = true;
 if (missingVars.length > 0) {
@@ -118,9 +102,15 @@ if (botEnabled) {
   loadCommands(client);
 }
 
+// ==================== SISTEMA ANTI-DUPLICADOS ====================
+const processedMessages = new Set();
+const activeAIProcessing = new Map();
+const processedWelcomes = new Set();
+
 // ==================== EVENTO READY ====================
 client.once("ready", () => {
   addLog('success', `🎉 Bot conectado: ${client.user.tag}`);
+  addLog('info', `🌍 Bot presente en ${client.guilds.cache.size} servidores`);
   console.log('🔍 Intents configurados:', client.options.intents);
 
   client.user.setPresence({
@@ -138,9 +128,21 @@ client.on("warn", info => {
   addLog('warning', `Discord warning: ${info}`);
 });
 
+// ==================== EVENTO GUILD JOIN ====================
+client.on("guildCreate", guild => {
+  addLog('success', `➕ Bot añadido a: ${guild.name} (${guild.id})`);
+  addLog('info', `👥 Total servidores: ${client.guilds.cache.size}`);
+});
+
+// ==================== EVENTO GUILD LEAVE ====================
+client.on("guildDelete", guild => {
+  addLog('warning', `➖ Bot removido de: ${guild.name} (${guild.id})`);
+  addLog('info', `👥 Total servidores: ${client.guilds.cache.size}`);
+});
+
 // ==================== INTERACTION CREATE ====================
 client.on("interactionCreate", async interaction => {
-  console.log(`📨 Interacción recibida: ${interaction.customId || interaction.commandName}`);
+  console.log(`📨 Interacción recibida: ${interaction.customId || interaction.commandName} en ${interaction.guild?.name || 'DM'}`);
 
   try {
     // ==================== COMANDOS SLASH ====================
@@ -157,7 +159,7 @@ client.on("interactionCreate", async interaction => {
 
       try {
         await command.execute(interaction);
-        addLog('info', `/${interaction.commandName} por ${interaction.user.tag}`);
+        addLog('info', `/${interaction.commandName} por ${interaction.user.tag} en ${interaction.guild?.name || 'DM'}`);
       } catch (err) {
         addLog('error', `Error /${interaction.commandName}: ${err.message}`);
         if (!interaction.replied && !interaction.deferred) {
@@ -208,6 +210,18 @@ client.on("interactionCreate", async interaction => {
 
       try {
         const guild = interaction.guild;
+        const guildConfig = loadGuildConfig(guild.id);
+
+        // ✅ VERIFICAR SI EL SISTEMA ESTÁ CONFIGURADO
+        if (!guildConfig || !guildConfig.tickets.enabled) {
+          return interaction.editReply({
+            content: `${EMOJI.CRUZ} El sistema de tickets no está configurado en este servidor.\n` +
+                     `Un administrador debe usar \`/config tickets\` primero.`
+          });
+        }
+
+        const TICKET_CATEGORY_ID = guildConfig.tickets.categoryId;
+        const STAFF_ROLES = guildConfig.tickets.staffRoles;
 
         const ticketChannel = await guild.channels.create({
           name: `ticket-${interaction.user.username}`,
@@ -266,7 +280,7 @@ client.on("interactionCreate", async interaction => {
           content: `${EMOJI.CHECK} Ticket creado: ${ticketChannel}`
         });
 
-        addLog('success', `Ticket creado por ${interaction.user.tag}`);
+        addLog('success', `Ticket creado por ${interaction.user.tag} en ${guild.name}`);
       } catch (error) {
         addLog('error', `Error ticket: ${error.message}`);
         await interaction.editReply({
@@ -287,7 +301,6 @@ client.on("interactionCreate", async interaction => {
         const direccion = interaction.fields.getTextInputValue("direccion");
         const telefono = interaction.fields.getTextInputValue("telefono");
 
-        // Validar formato de fecha
         const fechaRegex = /^\d{2}\/\d{2}\/\d{4}$/;
         if (!fechaRegex.test(fechaNacimiento)) {
           return interaction.editReply({
@@ -295,7 +308,6 @@ client.on("interactionCreate", async interaction => {
           });
         }
 
-        // Validar formato de teléfono
         const telefonoRegex = /^\d{9,15}$/;
         if (!telefonoRegex.test(telefono.replace(/\s/g, ''))) {
           return interaction.editReply({
@@ -303,7 +315,6 @@ client.on("interactionCreate", async interaction => {
           });
         }
 
-        // Generar número de DNI único
         const numeroDNI = generateDNINumber();
 
         const dniData = {
@@ -356,6 +367,15 @@ client.on("interactionCreate", async interaction => {
 
     // ==================== BOTÓN: RECLAMAR TICKET ====================
     if (interaction.isButton() && interaction.customId === "claim_ticket") {
+      const guildConfig = loadGuildConfig(interaction.guild.id);
+      if (!guildConfig || !guildConfig.tickets.enabled) {
+        return interaction.reply({
+          content: `${EMOJI.CRUZ} Sistema de tickets no configurado.`,
+          flags: 64
+        });
+      }
+
+      const STAFF_ROLES = guildConfig.tickets.staffRoles;
       const hasStaffRole = STAFF_ROLES.some(roleId => 
         interaction.member.roles.cache.has(roleId)
       );
@@ -433,11 +453,23 @@ client.on("interactionCreate", async interaction => {
 
     // ==================== BOTÓN: CERRAR TICKET ====================
     if (interaction.isButton() && interaction.customId === 'close_ticket') {
+      const guildConfig = loadGuildConfig(interaction.guild.id);
+      if (!guildConfig || !guildConfig.tickets.enabled) {
+        return interaction.reply({
+          content: `${EMOJI.CRUZ} Sistema de tickets no configurado.`,
+          flags: 64
+        });
+      }
+
+      const STAFF_ROLES = guildConfig.tickets.staffRoles;
       const channel = interaction.channel;
       const ticketOwnerId = channel.topic;
-      const staffRoleId = '1469344936620195872';
 
-      if (interaction.user.id !== ticketOwnerId && !interaction.member.roles.cache.has(staffRoleId)) {
+      const hasStaffRole = STAFF_ROLES.some(roleId => 
+        interaction.member.roles.cache.has(roleId)
+      );
+
+      if (interaction.user.id !== ticketOwnerId && !hasStaffRole) {
         return interaction.reply({
           content: `${EMOJI.CRUZ} Solo el creador del ticket o el staff puede cerrarlo.`,
           flags: 64
@@ -488,7 +520,9 @@ client.on("interactionCreate", async interaction => {
       }
 
       const channel = interaction.channel;
-      const staffRoleId = '1469344936620195872';
+      const guildConfig = loadGuildConfig(interaction.guild.id);
+      const STAFF_ROLES = guildConfig.tickets.staffRoles;
+      const RATINGS_CHANNEL_ID = guildConfig.tickets.ratingsChannelId;
 
       try {
         const messages = await channel.messages.fetch({ limit: 100 });
@@ -496,7 +530,7 @@ client.on("interactionCreate", async interaction => {
         let staffMember = null;
         for (const msg of messages.values()) {
           if (msg.author.bot) continue;
-          if (msg.member?.roles.cache.has(staffRoleId)) {
+          if (msg.member && STAFF_ROLES.some(roleId => msg.member.roles.cache.has(roleId))) {
             staffMember = msg.author;
             break;
           }
@@ -517,10 +551,11 @@ client.on("interactionCreate", async interaction => {
           )
           .setTimestamp();
 
-        const ratingsChannel = interaction.guild.channels.cache.get(RATINGS_CHANNEL_ID);
-
-        if (ratingsChannel) {
-          await ratingsChannel.send({ embeds: [ratingEmbed] });
+        if (RATINGS_CHANNEL_ID) {
+          const ratingsChannel = interaction.guild.channels.cache.get(RATINGS_CHANNEL_ID);
+          if (ratingsChannel) {
+            await ratingsChannel.send({ embeds: [ratingEmbed] });
+          }
         }
 
         await interaction.reply({
@@ -569,6 +604,18 @@ client.on("interactionCreate", async interaction => {
     // ==================== SISTEMA DE TRABAJOS ====================
     if (interaction.isButton() && interaction.customId.startsWith("trabajo_")) {
       const trabajoSeleccionado = interaction.customId.replace("trabajo_", "");
+      const guildConfig = loadGuildConfig(interaction.guild.id);
+
+      // ✅ VERIFICAR SI EL SISTEMA ESTÁ CONFIGURADO
+      if (!guildConfig || !guildConfig.trabajos.enabled) {
+        return interaction.reply({
+          content: `${EMOJI.CRUZ} El sistema de trabajos no está configurado en este servidor.\n` +
+                   `Un administrador debe usar \`/config trabajos\` primero.`,
+          flags: 64
+        });
+      }
+
+      const TRABAJOS = guildConfig.trabajos.roles;
 
       // Renunciar a trabajo
       if (trabajoSeleccionado === "quitar") {
@@ -593,8 +640,7 @@ client.on("interactionCreate", async interaction => {
           });
         }
 
-        // Actualizar panel
-        await actualizarPanelTrabajos(interaction);
+        await actualizarPanelTrabajos(interaction, guildConfig);
         return;
       }
 
@@ -603,14 +649,12 @@ client.on("interactionCreate", async interaction => {
       if (!trabajo) return;
 
       try {
-        // Quitar roles de otros trabajos
         for (const [key, t] of Object.entries(TRABAJOS)) {
           if (key !== trabajoSeleccionado && interaction.member.roles.cache.has(t.roleId)) {
             await interaction.member.roles.remove(t.roleId);
           }
         }
 
-        // Verificar si ya tiene el trabajo
         if (interaction.member.roles.cache.has(trabajo.roleId)) {
           return interaction.reply({
             content: `ℹ️ Ya eres **${trabajo.nombre}**.`,
@@ -618,7 +662,6 @@ client.on("interactionCreate", async interaction => {
           });
         }
 
-        // Dar nuevo trabajo
         await interaction.member.roles.add(trabajo.roleId);
 
         await interaction.reply({
@@ -628,8 +671,7 @@ client.on("interactionCreate", async interaction => {
 
         addLog('info', `${interaction.user.tag} ahora es ${trabajo.nombre}`);
 
-        // Actualizar panel
-        await actualizarPanelTrabajos(interaction);
+        await actualizarPanelTrabajos(interaction, guildConfig);
 
       } catch (error) {
         console.error("Error asignando trabajo:", error);
@@ -643,6 +685,19 @@ client.on("interactionCreate", async interaction => {
 
     // ==================== BOTÓN: INICIAR VERIFICACIÓN ====================
     if (interaction.isButton() && interaction.customId === "verify_start") {
+      const guildConfig = loadGuildConfig(interaction.guild.id);
+
+      // ✅ VERIFICAR SI EL SISTEMA ESTÁ CONFIGURADO
+      if (!guildConfig || !guildConfig.verification.enabled) {
+        return interaction.reply({
+          content: `${EMOJI.CRUZ} El sistema de verificación no está configurado en este servidor.\n` +
+                   `Un administrador debe usar \`/config verificacion\` primero.`,
+          flags: 64
+        });
+      }
+
+      const VERIFIED_ROLE_ID = guildConfig.verification.roleId;
+
       if (interaction.member.roles.cache.has(VERIFIED_ROLE_ID)) {
         return interaction.reply({
           content: `${EMOJI.CHECK} Ya estás verificado.`,
@@ -674,7 +729,7 @@ client.on("interactionCreate", async interaction => {
           timestamp: Date.now()
         });
 
-        addLog('info', `Verificación iniciada: ${interaction.user.tag}`);
+        addLog('info', `Verificación iniciada: ${interaction.user.tag} en ${interaction.guild.name}`);
 
       } catch (error) {
         addLog('error', `Error MD: ${error.message}`);
@@ -695,9 +750,10 @@ client.on("interactionCreate", async interaction => {
 });
 
 // ==================== FUNCIÓN ACTUALIZAR PANEL TRABAJOS ====================
-async function actualizarPanelTrabajos(interaction) {
+async function actualizarPanelTrabajos(interaction, guildConfig) {
   try {
     const guild = interaction.guild;
+    const TRABAJOS = guildConfig.trabajos.roles;
     const contadores = {};
 
     for (const [key, trabajo] of Object.entries(TRABAJOS)) {
@@ -705,16 +761,17 @@ async function actualizarPanelTrabajos(interaction) {
       contadores[key] = role ? role.members.size : 0;
     }
 
+    const trabajosList = Object.entries(TRABAJOS)
+      .map(([key, trabajo]) => `${trabajo.emoji} **${trabajo.nombre}:** \`${contadores[key]}\` personas`)
+      .join('\n');
+
     const embed = new EmbedBuilder()
       .setColor("#00BFFF")
       .setTitle("💼 CENTRO DE EMPLEO")
       .setDescription(
         "Selecciona tu trabajo haciendo clic en el botón correspondiente.\n\n" +
         "**📊 Personal actual por departamento:**\n" +
-        `${TRABAJOS.policia.emoji} **Policía:** \`${contadores.policia}\` oficiales\n` +
-        `${TRABAJOS.medico.emoji} **Médico:** \`${contadores.medico}\` doctores\n` +
-        `${TRABAJOS.bombero.emoji} **Bombero:** \`${contadores.bombero}\` bomberos\n` +
-        `${TRABAJOS.mecanico.emoji} **Mecánico:** \`${contadores.mecanico}\` mecánicos\n\n` +
+        trabajosList + "\n\n" +
         "⚠️ **Importante:**\n" +
         "• Solo puedes tener un trabajo a la vez\n" +
         "• Al seleccionar un trabajo nuevo, perderás el anterior\n" +
@@ -723,67 +780,60 @@ async function actualizarPanelTrabajos(interaction) {
       .setFooter({ text: "Sistema de empleos" })
       .setTimestamp();
 
-    const row1 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("trabajo_policia")
-        .setLabel(`${TRABAJOS.policia.emoji} Policía (${contadores.policia})`)
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("trabajo_medico")
-        .setLabel(`${TRABAJOS.medico.emoji} Médico (${contadores.medico})`)
-        .setStyle(ButtonStyle.Danger)
-    );
+    const rows = [];
+    const trabajosArray = Object.entries(TRABAJOS);
 
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("trabajo_bombero")
-        .setLabel(`${TRABAJOS.bombero.emoji} Bombero (${contadores.bombero})`)
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("trabajo_mecanico")
-        .setLabel(`${TRABAJOS.mecanico.emoji} Mecánico (${contadores.mecanico})`)
-        .setStyle(ButtonStyle.Success)
-    );
+    // Crear botones dinámicamente (máximo 5 por fila)
+    for (let i = 0; i < trabajosArray.length; i += 2) {
+      const row = new ActionRowBuilder();
 
-    const row3 = new ActionRowBuilder().addComponents(
+      for (let j = i; j < Math.min(i + 2, trabajosArray.length); j++) {
+        const [key, trabajo] = trabajosArray[j];
+        row.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`trabajo_${key}`)
+            .setLabel(`${trabajo.emoji} ${trabajo.nombre} (${contadores[key]})`)
+            .setStyle(j % 4 === 0 ? ButtonStyle.Primary : 
+                     j % 4 === 1 ? ButtonStyle.Danger : 
+                     j % 4 === 2 ? ButtonStyle.Secondary : ButtonStyle.Success)
+        );
+      }
+
+      rows.push(row);
+    }
+
+    // Botón de renunciar
+    const quitRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("trabajo_quitar")
         .setLabel("🚫 Renunciar a mi trabajo")
         .setStyle(ButtonStyle.Danger)
     );
+    rows.push(quitRow);
 
     await interaction.message.edit({
       embeds: [embed],
-      components: [row1, row2, row3]
+      components: rows
     });
   } catch (error) {
     console.error("Error actualizando panel:", error);
   }
 }
 
-// ==================== SISTEMA ANTI-DUPLICADOS PARA IA ====================
-const processedMessages = new Set();
-const activeAIProcessing = new Map();
-
 // ==================== MANEJADOR DE MENSAJES (IA + VERIFICACIÓN) ====================
 client.on("messageCreate", async message => {
-  // Ignorar bots
   if (message.author.bot) return;
 
-  // Evitar procesar el mismo mensaje múltiples veces
   if (processedMessages.has(message.id)) {
     console.log(`⚠️ Mensaje ${message.id} ya fue procesado - IGNORANDO`);
     return;
   }
 
   processedMessages.add(message.id);
-
-  // Limpiar caché cada 30 segundos
   setTimeout(() => processedMessages.delete(message.id), 30000);
 
-  // --- MENCIONES CON IA (solo en servidores) ---
+  // --- MENCIONES CON IA (solo en servidores) - FUNCIONA GLOBALMENTE ---
   if (message.guild && message.mentions.has(client.user.id)) {
-    // Verificar si ya está procesando este mensaje
     if (activeAIProcessing.has(message.id)) {
       console.log(`⚠️ Mensaje ${message.id} ya está siendo procesado por IA - IGNORANDO`);
       return;
@@ -840,16 +890,14 @@ client.on("messageCreate", async message => {
         }
       }
 
-      addLog('success', `IA respondió a ${message.author.tag}: "${prompt.substring(0, 50)}..."`);
+      addLog('success', `IA respondió a ${message.author.tag} en ${message.guild.name}`);
     } catch (error) {
       addLog('error', `Error IA: ${error.message}`);
       await message.reply(`${EMOJI.CRUZ} Error procesando tu pregunta.`).catch(() => {});
     } finally {
-      // Limpiar el flag después de 5 segundos
       setTimeout(() => activeAIProcessing.delete(message.id), 5000);
     }
 
-    // IMPORTANTE: Return para evitar que continúe procesando
     return;
   }
 
@@ -865,7 +913,6 @@ client.on("messageCreate", async message => {
     }
 
     try {
-      // PASO 1: ESPERANDO EMAIL
       if (userData.step === "waiting_email") {
         const email = message.content.trim();
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -912,7 +959,6 @@ client.on("messageCreate", async message => {
         addLog('success', `Código enviado a ${email}`);
       }
 
-      // PASO 2: ESPERANDO CÓDIGO
       else if (userData.step === "waiting_code") {
         const inputCode = message.content.trim();
 
@@ -927,8 +973,14 @@ client.on("messageCreate", async message => {
             return message.reply(`${EMOJI.CRUZ} Servidor no encontrado.`);
           }
 
+          const guildConfig = loadGuildConfig(guild.id);
+          if (!guildConfig || !guildConfig.verification.enabled) {
+            verificationCodes.delete(message.author.id);
+            return message.reply(`${EMOJI.CRUZ} Sistema de verificación no configurado en el servidor.`);
+          }
+
           const member = await guild.members.fetch(message.author.id);
-          const role = guild.roles.cache.get(VERIFIED_ROLE_ID);
+          const role = guild.roles.cache.get(guildConfig.verification.roleId);
 
           if (!role) {
             verificationCodes.delete(message.author.id);
@@ -946,7 +998,7 @@ client.on("messageCreate", async message => {
             .setTimestamp();
 
           await message.reply({ embeds: [embed] });
-          addLog('success', `Usuario verificado: ${message.author.tag}`);
+          addLog('success', `Usuario verificado: ${message.author.tag} en ${guild.name}`);
         } else {
           await message.reply(`${EMOJI.CRUZ} Código incorrecto.`);
         }
@@ -961,12 +1013,31 @@ client.on("messageCreate", async message => {
 
 // ==================== EVENTO BIENVENIDA ====================
 client.on("guildMemberAdd", async member => {
-  try {
-    if (!WELCOME_CHANNEL_ID) return;
+  if (processedWelcomes.has(member.id)) {
+    console.log(`⚠️ Bienvenida para ${member.user.tag} ya procesada - IGNORANDO`);
+    return;
+  }
 
+  processedWelcomes.add(member.id);
+  setTimeout(() => {
+    processedWelcomes.delete(member.id);
+    console.log(`🧹 Limpiado flag de bienvenida para ${member.user.tag}`);
+  }, 30000);
+
+  try {
+    const guildConfig = loadGuildConfig(member.guild.id);
+
+    // ✅ VERIFICAR SI EL SISTEMA ESTÁ CONFIGURADO Y HABILITADO
+    if (!guildConfig || !guildConfig.welcome.enabled) {
+      console.log(`ℹ️ Bienvenidas desactivadas en ${member.guild.name}`);
+      return;
+    }
+
+    const WELCOME_CHANNEL_ID = guildConfig.welcome.channelId;
     const channel = member.guild.channels.cache.get(WELCOME_CHANNEL_ID);
+
     if (!channel) {
-      addLog('warning', 'Canal de bienvenida no encontrado');
+      addLog('warning', `Canal de bienvenida no encontrado en ${member.guild.name}`);
       return;
     }
 
@@ -980,17 +1051,22 @@ client.on("guildMemberAdd", async member => {
         { name: "📊 Miembro", value: `#${member.guild.memberCount}`, inline: true },
         { name: "📅 Creado", value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true }
       )
-      .setImage("https://raw.githubusercontent.com/gonzalopriv9-byte/EspanoletesBOT.1/main/assets/bienvenida.png")
+      .setFooter({ text: "Bienvenido al servidor" })
       .setTimestamp();
 
     await channel.send({
       content: `${EMOJI.MEGAFONO} **¡Bienvenido ${member}!** ${EMOJI.MEGAFONO}`,
-      embeds: [embed]
+      embeds: [embed],
+      files: [{
+        attachment: "https://raw.githubusercontent.com/gonzalopriv9-byte/EspanoletesBOT.1/main/assets/ChatGPT_Image_13_feb_2026_19_27_59.webp",
+        name: "bienvenida.webp"
+      }]
     });
 
-    addLog('success', `Bienvenida: ${member.user.tag}`);
+    addLog('success', `Bienvenida enviada: ${member.user.tag} en ${member.guild.name}`);
   } catch (error) {
     addLog('error', `Error bienvenida: ${error.message}`);
+    processedWelcomes.delete(member.id);
   }
 });
 
@@ -1016,7 +1092,7 @@ if (botEnabled) {
 const app = express();
 
 app.get("/", (req, res) => {
-  res.send(`<h1>Bot funcionando - ${new Date().toLocaleString('es-ES')}</h1><p>Discord: ${botEnabled ? 'Conectado' : 'Desactivado'}</p>`);
+  res.send(`<h1>Bot funcionando - ${new Date().toLocaleString('es-ES')}</h1><p>Discord: ${botEnabled ? 'Conectado' : 'Desactivado'}</p><p>Servidores: ${client.guilds?.cache.size || 0}</p>`);
 });
 
 app.listen(process.env.PORT || 10000, "0.0.0.0", () => {
