@@ -4,7 +4,6 @@ const path = require("path");
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const TOKEN = process.env.DISCORD_TOKEN;
-const TEST_GUILD_ID = "1353793314482028644"; // Servidor de pruebas para comandos instantáneos
 
 async function loadCommands(client) {
   const commands = [];
@@ -34,7 +33,7 @@ async function loadCommands(client) {
     }
   }
 
-  // ==================== REGISTRAR COMANDOS ====================
+  // ==================== REGISTRAR COMANDOS GLOBALMENTE ====================
   if (!CLIENT_ID || !TOKEN) {
     console.warn("⚠️ Falta CLIENT_ID o TOKEN - Comandos no registrados");
     return;
@@ -43,27 +42,16 @@ async function loadCommands(client) {
   const rest = new REST({ version: "10" }).setToken(TOKEN);
 
   try {
-    // ==================== 1. COMANDOS EN SERVIDOR DE PRUEBAS (INSTANTÁNEOS) ====================
-    console.log(`🚀 Registrando ${commands.length} comandos en servidor de pruebas (instantáneo)...`);
-
-    const testGuildData = await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, TEST_GUILD_ID),
-      { body: commands }
-    );
-
-    console.log(`✅ ${testGuildData.length} comandos registrados en servidor de pruebas`);
-    console.log(`   ID del servidor: ${TEST_GUILD_ID}`);
-
-    // ==================== 2. COMANDOS GLOBALES (TODOS LOS SERVIDORES) ====================
     console.log(`🌍 Registrando ${commands.length} comandos globalmente...`);
 
-    const globalData = await rest.put(
+    const data = await rest.put(
       Routes.applicationCommands(CLIENT_ID),
       { body: commands }
     );
 
-    console.log(`✅ ${globalData.length} comandos registrados globalmente`);
-    console.log(`ℹ️ Los comandos globales pueden tardar hasta 1 hora en aparecer en otros servidores`);
+    console.log(`✅ ${data.length} comandos registrados globalmente`);
+    console.log(`ℹ️ Los comandos pueden tardar hasta 1 hora en aparecer`);
+    console.log(`ℹ️ Para verlos inmediatamente: sal y vuelve a entrar al servidor`);
 
   } catch (error) {
     console.error("❌ Error registrando comandos:", error);
