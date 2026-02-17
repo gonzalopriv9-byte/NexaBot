@@ -10,7 +10,7 @@ const EMOJI = {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('setupticket')
-    .setDescription('Configurar y crear panel de tickets')
+    .setDescription('Configurar y crear panel de tickets (todo-en-uno)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addRoleOption(option =>
       option.setName('rol_staff')
@@ -30,9 +30,11 @@ module.exports = {
       const canalValoraciones = interaction.options.getChannel('canal_valoraciones');
       const guild = interaction.guild;
 
-      // ==================== CREAR CATEGORÍA AUTOMÁTICAMENTE ====================
+      // ==================== PASO 1: CREAR CATEGORÍA AUTOMÁTICAMENTE ====================
+      console.log('📋 [TICKETS] Buscando o creando categoría...');
+
       let categoriaTickets = guild.channels.cache.find(
-        c => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === 'tickets'
+        c => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('ticket')
       );
 
       if (!categoriaTickets) {
@@ -59,10 +61,12 @@ module.exports = {
 
         console.log(`✅ Categoría creada: ${categoriaTickets.name} (${categoriaTickets.id})`);
       } else {
-        console.log(`ℹ️ Categoría de tickets ya existe: ${categoriaTickets.name}`);
+        console.log(`ℹ️ Usando categoría existente: ${categoriaTickets.name}`);
       }
 
-      // ==================== CONFIGURAR SISTEMA DE TICKETS ====================
+      // ==================== PASO 2: CONFIGURAR SISTEMA EN DATABASE ====================
+      console.log('💾 Guardando configuración en base de datos...');
+
       const success = updateGuildConfig(guild.id, 'tickets', {
         enabled: true,
         categoryId: categoriaTickets.id,
@@ -72,11 +76,15 @@ module.exports = {
 
       if (!success) {
         return interaction.editReply({
-          content: `${EMOJI.CRUZ} Error al guardar la configuración.`
+          content: `${EMOJI.CRUZ} Error al guardar la configuración. Verifica que exista la carpeta data/.`
         });
       }
 
-      // ==================== CREAR PANEL DE TICKETS ====================
+      console.log('✅ Configuración guardada correctamente');
+
+      // ==================== PASO 3: CREAR PANEL DE TICKETS ====================
+      console.log('🎨 Creando panel visual...');
+
       const embed = new EmbedBuilder()
         .setColor('#00BFFF')
         .setTitle(`${EMOJI.TICKET} Sistema de Tickets`)
@@ -99,40 +107,62 @@ module.exports = {
           .setCustomId('open_ticket')
           .setLabel('📋 Abrir Ticket')
           .setStyle(ButtonStyle.Primary)
+          .setEmoji('🎫')
       );
 
-      // Enviar panel al canal
       await interaction.channel.send({
         embeds: [embed],
         components: [row]
       });
 
-      // Responder al admin
+      console.log('✅ Panel creado en el canal');
+
+      // ==================== PASO 4: RESPONDER AL ADMIN ====================
       const configEmbed = new EmbedBuilder()
         .setColor('#00FF00')
         .setTitle(`${EMOJI.CHECK} Sistema de Tickets Configurado`)
         .setDescription(
-          `✅ **Panel de tickets creado en este canal**\n\n` +
+          `✅ **¡Todo listo! El sistema de tickets está funcionando.**\n\n` +
+          `**Configuración aplicada:**\n` +
           `📁 **Categoría:** ${categoriaTickets}\n` +
           `👮 **Staff:** ${rolStaff}\n` +
           `⭐ **Valoraciones:** ${canalValoraciones}\n\n` +
-          `Los tickets se crearán automáticamente en la categoría cuando los usuarios hagan clic en el botón.`
+          `**¿Cómo funciona?**\n` +
+          `1. Los usuarios hacen clic en "📋 Abrir Ticket"\n` +
+          `2. Se crea un canal privado en ${categoriaTickets}\n` +
+          `3. El staff recibe notificación\n` +
+          `4. Al cerrar, se pide una valoración\n\n` +
+          `${EMOJI.TICKET} Panel creado arriba en este canal`
+        )
+        .addFields(
+          { 
+            name: '🎛️ Gestión del sistema', 
+            value: 'Para cambiar la configuración, usa `/config tickets`',
+            inline: false
+          }
         )
         .setFooter({ text: 'Sistema configurado correctamente' })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [configEmbed] });
 
+      console.log('✅ Configuración completa - setupticket finalizado');
+
     } catch (error) {
-      console.error('Error en setupticket:', error);
+      console.error('❌ Error en setupticket:', error);
+
+      const errorMsg = error.code === 50013 
+        ? 'No tengo permisos suficientes. Necesito permisos de Administrador o "Gestionar Canales".'
+        : `Error: ${error.message}`;
+
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
-          content: `${EMOJI.CRUZ} Error al configurar los tickets.`,
+          content: `${EMOJI.CRUZ} ${errorMsg}`,
           flags: 64
         }).catch(() => {});
       } else {
         await interaction.editReply({
-          content: `${EMOJI.CRUZ} Error al configurar los tickets: ${error.message}`
+          content: `${EMOJI.CRUZ} ${errorMsg}`
         }).catch(() => {});
       }
     }
