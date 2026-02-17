@@ -1,40 +1,60 @@
-
+const { REST, Routes } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
-const { REST, Routes } = require("discord.js");
+
+const CLIENT_ID = process.env.CLIENT_ID;
+const TOKEN = process.env.DISCORD_TOKEN;
 
 async function loadCommands(client) {
-  const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID } = process.env;
-  if (!DISCORD_TOKEN || !CLIENT_ID || !GUILD_ID) {
-    console.warn("⚠️ Faltan variables de entorno - Comandos no registrados");
+  const commands = [];
+  const commandsPath = path.join(__dirname, "..", "commands");
+
+  if (!fs.existsSync(commandsPath)) {
+    console.warn("⚠️ Carpeta 'commands' no encontrada");
     return;
   }
 
-  const commandsPath = path.join(__dirname, "..", "commands");
-  const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith(".js"));
-
-  const commandsJSON = [];
+  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".js"));
 
   for (const file of commandFiles) {
-    const command = require(path.join(commandsPath, file));
-    if (!command.data || !command.execute) {
-      console.warn(`⚠️ El comando ${file} no tiene data o execute`);
-      continue;
+    try {
+      const filePath = path.join(commandsPath, file);
+      const command = require(filePath);
+
+      if ("data" in command && "execute" in command) {
+        client.commands.set(command.data.name, command);
+        commands.push(command.data.toJSON());
+        console.log(`✅ Comando cargado: ${command.data.name}`);
+      } else {
+        console.warn(`⚠️ ${file} no tiene 'data' o 'execute'`);
+      }
+    } catch (error) {
+      console.error(`❌ Error cargando ${file}:`, error.message);
     }
-    client.commands.set(command.data.name, command);
-    commandsJSON.push(command.data.toJSON());
   }
 
-  const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
+  // ==================== REGISTRAR COMANDOS GLOBALMENTE ====================
+  if (!CLIENT_ID || !TOKEN) {
+    console.warn("⚠️ Falta CLIENT_ID o TOKEN - Comandos no registrados");
+    return;
+  }
+
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
 
   try {
+    console.log(`🔄 Registrando ${commands.length} comandos globalmente...`);
+
+    // ✅ COMANDOS GLOBALES (funcionan en todos los servidores)
     await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      { body: commandsJSON }
+      Routes.applicationCommands(CLIENT_ID),
+      { body: commands }
     );
-    console.log("✅ Comandos cargados y registrados");
-  } catch (err) {
-    console.error("❌ Error registrando comandos:", err);
+
+    console.log(`✅ ${commands.length} comandos registrados globalmente`);
+    console.log(`ℹ️ Los comandos pueden tardar hasta 1 hora en aparecer`);
+    console.log(`ℹ️ Para testing instantáneo, usa comandos por servidor (ver docs)`);
+  } catch (error) {
+    console.error("❌ Error registrando comandos:", error);
   }
 }
 
