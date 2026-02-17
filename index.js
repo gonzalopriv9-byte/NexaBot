@@ -1041,6 +1041,10 @@ client.on("guildMemberAdd", async member => {
       return;
     }
 
+    // ✅ USAR IMAGEN PERSONALIZADA DESDE CONFIG
+    const imageUrl = guildConfig.welcome.imageUrl || 
+      "https://raw.githubusercontent.com/gonzalopriv9-byte/EspanoletesBOT.1/main/assets/ChatGPT_Image_13_feb_2026_19_27_59.webp";
+
     const embed = new EmbedBuilder()
       .setColor("#FFD700")
       .setTitle(`${EMOJI.MEGAFONO} ¡BIENVENIDO!`)
@@ -1058,7 +1062,7 @@ client.on("guildMemberAdd", async member => {
       content: `${EMOJI.MEGAFONO} **¡Bienvenido ${member}!** ${EMOJI.MEGAFONO}`,
       embeds: [embed],
       files: [{
-        attachment: "https://raw.githubusercontent.com/gonzalopriv9-byte/EspanoletesBOT.1/main/assets/ChatGPT_Image_13_feb_2026_19_27_59.webp",
+        attachment: imageUrl,
         name: "bienvenida.webp"
       }]
     });
