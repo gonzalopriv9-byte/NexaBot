@@ -59,3 +59,12 @@ async function loadCommands(client) {
 }
 
 module.exports = { loadCommands };
+
+// En commandHandler.js
+const GUILD_ID = "1353793314482028644"; // ID de tu servidor de desarrollo
+
+await rest.put(
+  Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+  { body: commands }
+);
+
