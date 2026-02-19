@@ -40,25 +40,30 @@ async function loadCommands(client) {
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
 
+  // 1. Registrar en servidor de pruebas (instantaneo)
   try {
-    // 1. Registrar instantaneamente en el servidor de pruebas
-    console.log("Registrando " + commands.length + " comandos en servidor de pruebas (instantaneo)...");
+    console.log("Registrando " + commands.length + " comandos en servidor de pruebas...");
     const guildData = await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, TEST_GUILD_ID),
       { body: commands }
     );
     console.log(guildData.length + " comandos registrados en servidor de pruebas correctamente");
+  } catch (error) {
+    console.error("Error registrando en servidor de pruebas: " + error.message);
+    if (error.rawError) console.error("Detalle: " + JSON.stringify(error.rawError));
+  }
 
-    // 2. Registrar globalmente (puede tardar hasta 1h en otros servidores)
+  // 2. Registrar globalmente
+  try {
     console.log("Registrando " + commands.length + " comandos globalmente...");
     const globalData = await rest.put(
       Routes.applicationCommands(CLIENT_ID),
       { body: commands }
     );
-    console.log(globalData.length + " comandos registrados globalmente (pueden tardar hasta 1h en otros servidores)");
-
+    console.log(globalData.length + " comandos registrados globalmente");
   } catch (error) {
-    console.error("Error registrando comandos: " + error.message);
+    console.error("Error registrando globalmente: " + error.message);
+    if (error.rawError) console.error("Detalle global: " + JSON.stringify(error.rawError));
   }
 }
 
