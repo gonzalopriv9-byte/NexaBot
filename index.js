@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const {
@@ -46,7 +47,6 @@ const supabase = createClient(
 
 // ==================== HELPERS SUPABASE ====================
 
-/** Guarda o actualiza un DNI en Supabase (tabla: dnis) */
 async function saveDNISupabase(userId, dniData) {
   const { error } = await supabase
     .from("dnis")
@@ -55,7 +55,6 @@ async function saveDNISupabase(userId, dniData) {
   return !error;
 }
 
-/** Obtiene el DNI de un usuario (tabla: dnis) */
 async function getDNISupabase(userId) {
   const { data, error } = await supabase
     .from("dnis")
@@ -66,7 +65,6 @@ async function getDNISupabase(userId) {
   return data || null;
 }
 
-/** Comprueba si un usuario tiene DNI (tabla: dnis) */
 async function hasDNISupabase(userId) {
   const { data } = await supabase
     .from("dnis")
@@ -76,7 +74,6 @@ async function hasDNISupabase(userId) {
   return !!data;
 }
 
-/** Elimina el DNI de un usuario (tabla: dnis) */
 async function deleteDNISupabase(userId) {
   const { error } = await supabase
     .from("dnis")
@@ -86,7 +83,6 @@ async function deleteDNISupabase(userId) {
   return !error;
 }
 
-/** Guarda un log en Supabase (tabla: bot_logs) */
 async function saveLogSupabase(type, message) {
   const { error } = await supabase
     .from("bot_logs")
@@ -94,7 +90,6 @@ async function saveLogSupabase(type, message) {
   if (error) console.error(`Supabase log error: ${error.message}`);
 }
 
-/** Guarda un ticket en Supabase (tabla: tickets) */
 async function saveTicketSupabase(data) {
   const { error } = await supabase
     .from("tickets")
@@ -103,7 +98,6 @@ async function saveTicketSupabase(data) {
   return !error;
 }
 
-/** Guarda una valoración de ticket (tabla: ticket_ratings) */
 async function saveRatingSupabase(data) {
   const { error } = await supabase
     .from("ticket_ratings")
@@ -112,7 +106,6 @@ async function saveRatingSupabase(data) {
   return !error;
 }
 
-/** Guarda un usuario verificado (tabla: verified_users) */
 async function saveVerifiedUserSupabase(userId, email, guildId) {
   const { error } = await supabase
     .from("verified_users")
@@ -126,7 +119,6 @@ async function saveVerifiedUserSupabase(userId, email, guildId) {
   return !error;
 }
 
-/** Guarda el blacklist ban de un usuario (tabla: blacklist_bans) */
 async function saveBlacklistBanSupabase(userId, guildId, reason) {
   const { error } = await supabase
     .from("blacklist_bans")
@@ -201,7 +193,8 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildModeration  // Necesario para guildAuditLogEntryCreate
   ]
 });
 
@@ -293,8 +286,7 @@ async function handleBotFlood(message) {
 // ==================== BLACKLIST: DM + BAN AL ENTRAR ====================
 async function dmBanNotice(member, reason, until) {
   const untilText = until ? new Date(until).toLocaleString("es-ES") : "nunca";
-  const msg = `Has sido baneado por el sistema de proteccion Nexa.\n\nMotivo ${reason || "Sin especificar"}\nEl ban se levanta en ${untilText}`;
-
+  const msg = `Has sido baneado por el sistema de proteccion Nexa.\n\nMotivo: ${reason || "Sin especificar"}\nEl ban se levanta en: ${untilText}`;
   try {
     await member.send({ content: msg });
   } catch {
@@ -331,8 +323,55 @@ client.on("guildDelete", (guild) => {
   addLog("info", `👥 Total servidores: ${client.guilds.cache.size}`);
 });
 
+// ==================== DETECCIÓN BOT AÑADIDO (BLACKLIST) ====================
+client.on("guildAuditLogEntryCreate", async (auditLog, guild) => {
+  if (auditLog.action !== AuditLogEvent.BotAdd) return;
+
+  const botId = auditLog.target?.id;
+  if (!botId) return;
+
+  try {
+    // Ignorar si es el propio bot
+    if (TRUSTED_IDS.has(botId)) return;
+
+    const fakeUser = { id: botId, bot: true };
+    const entry = getEntry(fakeUser);
+
+    if (!entry) return;
+
+    const me = guild.members.me;
+    if (!me?.permissions.has(PermissionFlagsBits.BanMembers)) {
+      addLog("error", `❌ Sin permisos para banear bot blacklisted en ${guild.name}`);
+      return;
+    }
+
+    await guild.members.ban(botId, {
+      reason: `Nexa Protection blacklist: ${entry.reason || "Sin motivo"}`
+    });
+
+    addLog("warning", `⛔ Bot en blacklist baneado al añadirse: ${botId} en ${guild.name} | ${entry.reason}`);
+    await saveBlacklistBanSupabase(botId, guild.id, entry.reason || "Sin motivo");
+
+    // Banear también a quien lo añadió si no es el owner ni trusted
+    const executorId = auditLog.executor?.id;
+    if (executorId && executorId !== guild.ownerId && !TRUSTED_IDS.has(executorId)) {
+      try {
+        await guild.members.ban(executorId, {
+          reason: `Nexa Protection: añadió bot en blacklist (${botId})`
+        });
+        addLog("warning", `🔨 Executor baneado por añadir bot blacklisted: ${executorId} en ${guild.name}`);
+      } catch (e) {
+        addLog("error", `❌ Error baneando executor: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    addLog("error", `❌ Error blacklist BotAdd audit: ${e.message}`);
+  }
+});
+
 // ==================== EVENTO GUILD MEMBER ADD (BLACKLIST + BIENVENIDA) ====================
 client.on("guildMemberAdd", async (member) => {
+  // 1) Blacklist -> DM + BAN + return
   try {
     const entry = getEntry(member.user);
     if (entry) {
@@ -346,7 +385,6 @@ client.on("guildMemberAdd", async (member) => {
           "warning",
           `⛔ Blacklist autoban: ${member.user.tag} (${member.id}) en ${member.guild.name} | ${entry.reason || "Sin motivo"}`
         );
-        // Guardar ban en Supabase
         await saveBlacklistBanSupabase(member.id, member.guild.id, entry.reason || "Sin motivo");
       } else {
         addLog("error", `❌ No tengo permiso para banear (Blacklist) en ${member.guild.name}`);
@@ -357,6 +395,7 @@ client.on("guildMemberAdd", async (member) => {
     addLog("error", `❌ Blacklist autoban error: ${e.message}`);
   }
 
+  // 2) Bienvenida (sin duplicados)
   if (processedWelcomes.has(member.id)) {
     console.log(`⚠️ Bienvenida para ${member.user.tag} ya procesada - IGNORANDO`);
     return;
@@ -408,12 +447,7 @@ client.on("guildMemberAdd", async (member) => {
     await channel.send({
       content: `${EMOJI.MEGAFONO} **¡Bienvenido ${member}!** ${EMOJI.MEGAFONO}`,
       embeds: [embed],
-      files: [
-        {
-          attachment: imageUrl,
-          name: "bienvenida.webp"
-        }
-      ]
+      files: [{ attachment: imageUrl, name: "bienvenida.webp" }]
     });
 
     addLog("success", `Bienvenida enviada: ${member.user.tag} en ${member.guild.name}`);
@@ -435,10 +469,7 @@ client.on("interactionCreate", async (interaction) => {
     // ==================== COMANDOS SLASH ====================
     if (interaction.isChatInputCommand()) {
       if (global.maintenanceMode && interaction.user.id !== MAINTENANCE_USER_ID) {
-        return interaction.reply({
-          content: "⚠️ El bot está en mantenimiento.",
-          flags: 64
-        });
+        return interaction.reply({ content: "⚠️ El bot está en mantenimiento.", flags: 64 });
       }
 
       const command = client.commands.get(interaction.commandName);
@@ -450,12 +481,7 @@ client.on("interactionCreate", async (interaction) => {
       } catch (err) {
         addLog("error", `Error /${interaction.commandName}: ${err.message}`);
         if (!interaction.replied && !interaction.deferred) {
-          interaction
-            .reply({
-              content: `${EMOJI.CRUZ} Error ejecutando el comando`,
-              flags: 64
-            })
-            .catch(() => {});
+          interaction.reply({ content: `${EMOJI.CRUZ} Error ejecutando el comando`, flags: 64 }).catch(() => {});
         }
       }
       return;
@@ -479,7 +505,10 @@ client.on("interactionCreate", async (interaction) => {
         .setPlaceholder("Describe tu problema")
         .setRequired(true);
 
-      modal.addComponents(new ActionRowBuilder().addComponents(robloxInput), new ActionRowBuilder().addComponents(reasonInput));
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(robloxInput),
+        new ActionRowBuilder().addComponents(reasonInput)
+      );
 
       await interaction.showModal(modal);
       return;
@@ -525,7 +554,6 @@ client.on("interactionCreate", async (interaction) => {
           ]
         });
 
-        // Guardar ticket en Supabase
         await saveTicketSupabase({
           channel_id: ticketChannel.id,
           guild_id: guild.id,
@@ -601,7 +629,6 @@ client.on("interactionCreate", async (interaction) => {
           username: interaction.user.username
         };
 
-        // Guardar DNI en Supabase (además del sistema local)
         const successLocal = saveDNI(interaction.user.id, {
           numeroDNI, nombreCompleto, fechaNacimiento,
           nacionalidad, direccion, telefono,
@@ -657,7 +684,6 @@ client.on("interactionCreate", async (interaction) => {
 
       await interaction.reply({ content: `${EMOJI.CHECK} ${interaction.user} ha reclamado este ticket.` });
 
-      // Actualizar estado del ticket en Supabase
       await supabase
         .from("tickets")
         .update({ status: "claimed", claimed_by: interaction.user.id, updated_at: new Date().toISOString() })
@@ -745,7 +771,10 @@ client.on("interactionCreate", async (interaction) => {
         .setMinLength(10)
         .setMaxLength(1000);
 
-      modal.addComponents(new ActionRowBuilder().addComponents(starsInput), new ActionRowBuilder().addComponents(reasonInput));
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(starsInput),
+        new ActionRowBuilder().addComponents(reasonInput)
+      );
       await interaction.showModal(modal);
       return;
     }
@@ -778,7 +807,6 @@ client.on("interactionCreate", async (interaction) => {
 
         const staffName = staffMember ? staffMember.tag : "No asignado";
 
-        // Guardar valoración en Supabase
         await saveRatingSupabase({
           channel_id: channel.id,
           guild_id: interaction.guild.id,
@@ -791,7 +819,6 @@ client.on("interactionCreate", async (interaction) => {
           ticket_name: channel.name
         });
 
-        // Actualizar estado ticket a cerrado
         await supabase
           .from("tickets")
           .update({ status: "closed", closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -830,7 +857,6 @@ client.on("interactionCreate", async (interaction) => {
               .map((m) => `[${m.createdAt.toLocaleString("es-ES")}] ${m.author.tag}: ${m.content}`)
               .join("\n");
 
-            // Guardar transcript en Supabase (tabla: ticket_transcripts)
             await supabase.from("ticket_transcripts").insert({
               channel_id: channel.id,
               guild_id: interaction.guild.id,
@@ -1081,6 +1107,7 @@ client.on("messageCreate", async (message) => {
     processedMessages.add(message.id);
     setTimeout(() => processedMessages.delete(message.id), 30000);
 
+    // --- MENCIONES CON IA ---
     if (message.guild && message.mentions.has(client.user.id)) {
       if (activeAIProcessing.has(message.id)) {
         console.log(`⚠️ Mensaje ${message.id} ya está siendo procesado por IA - IGNORANDO`);
@@ -1196,6 +1223,7 @@ client.on("messageCreate", async (message) => {
 
           await message.reply({ embeds: [embed] });
           addLog("success", `Código enviado a ${email}`);
+
         } else if (userData.step === "waiting_code") {
           const inputCode = message.content.trim();
           if (!/^\d{6}$/.test(inputCode)) return message.reply(`${EMOJI.CRUZ} Código inválido. 6 dígitos.`);
@@ -1223,7 +1251,6 @@ client.on("messageCreate", async (message) => {
 
             await member.roles.add(role);
 
-            // Guardar usuario verificado en Supabase
             await saveVerifiedUserSupabase(message.author.id, userData.email, guild.id);
 
             verificationCodes.delete(message.author.id);
