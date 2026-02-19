@@ -20,6 +20,7 @@ const express = require("express");
 const { loadCommands } = require("./handlers/commandHandler");
 const sgMail = require("@sendgrid/mail");
 const fetch = require("node-fetch");
+const { createClient } = require("@supabase/supabase-js");
 
 const { saveDNI, generateDNINumber, getDNI, hasDNI, deleteDNI } = require("./utils/database");
 const { loadGuildConfig } = require("./utils/configManager");
@@ -36,6 +37,107 @@ console.log(
 // ==================== VARIABLES BOT ====================
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
+
+// ==================== SUPABASE ====================
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
+
+// ==================== HELPERS SUPABASE ====================
+
+/** Guarda o actualiza un DNI en Supabase (tabla: dnis) */
+async function saveDNISupabase(userId, dniData) {
+  const { error } = await supabase
+    .from("dnis")
+    .upsert({ user_id: userId, ...dniData, updated_at: new Date().toISOString() });
+  if (error) addLog("error", `Supabase saveDNI: ${error.message}`);
+  return !error;
+}
+
+/** Obtiene el DNI de un usuario (tabla: dnis) */
+async function getDNISupabase(userId) {
+  const { data, error } = await supabase
+    .from("dnis")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+  if (error && error.code !== "PGRST116") addLog("error", `Supabase getDNI: ${error.message}`);
+  return data || null;
+}
+
+/** Comprueba si un usuario tiene DNI (tabla: dnis) */
+async function hasDNISupabase(userId) {
+  const { data } = await supabase
+    .from("dnis")
+    .select("user_id")
+    .eq("user_id", userId)
+    .single();
+  return !!data;
+}
+
+/** Elimina el DNI de un usuario (tabla: dnis) */
+async function deleteDNISupabase(userId) {
+  const { error } = await supabase
+    .from("dnis")
+    .delete()
+    .eq("user_id", userId);
+  if (error) addLog("error", `Supabase deleteDNI: ${error.message}`);
+  return !error;
+}
+
+/** Guarda un log en Supabase (tabla: bot_logs) */
+async function saveLogSupabase(type, message) {
+  const { error } = await supabase
+    .from("bot_logs")
+    .insert({ type, message, created_at: new Date().toISOString() });
+  if (error) console.error(`Supabase log error: ${error.message}`);
+}
+
+/** Guarda un ticket en Supabase (tabla: tickets) */
+async function saveTicketSupabase(data) {
+  const { error } = await supabase
+    .from("tickets")
+    .upsert({ ...data, updated_at: new Date().toISOString() });
+  if (error) addLog("error", `Supabase saveTicket: ${error.message}`);
+  return !error;
+}
+
+/** Guarda una valoración de ticket (tabla: ticket_ratings) */
+async function saveRatingSupabase(data) {
+  const { error } = await supabase
+    .from("ticket_ratings")
+    .insert({ ...data, created_at: new Date().toISOString() });
+  if (error) addLog("error", `Supabase saveRating: ${error.message}`);
+  return !error;
+}
+
+/** Guarda un usuario verificado (tabla: verified_users) */
+async function saveVerifiedUserSupabase(userId, email, guildId) {
+  const { error } = await supabase
+    .from("verified_users")
+    .upsert({
+      user_id: userId,
+      email,
+      guild_id: guildId,
+      verified_at: new Date().toISOString()
+    });
+  if (error) addLog("error", `Supabase saveVerifiedUser: ${error.message}`);
+  return !error;
+}
+
+/** Guarda el blacklist ban de un usuario (tabla: blacklist_bans) */
+async function saveBlacklistBanSupabase(userId, guildId, reason) {
+  const { error } = await supabase
+    .from("blacklist_bans")
+    .insert({
+      user_id: userId,
+      guild_id: guildId,
+      reason,
+      banned_at: new Date().toISOString()
+    });
+  if (error) addLog("error", `Supabase saveBlacklistBan: ${error.message}`);
+}
 
 // ==================== VARIABLES VERIFICACIÓN ====================
 const verificationCodes = new Map();
@@ -74,15 +176,20 @@ function addLog(type, message) {
 
   const emoji = { info: "📋", success: "✅", error: "❌", warning: "⚠️" };
   console.log(`${emoji[type] || "📝"} [${timestamp}] ${message}`);
+
+  // Guardar log en Supabase (sin await para no bloquear)
+  saveLogSupabase(type, message).catch(() => {});
 }
 
 // ==================== VALIDAR VARIABLES ====================
 const missingVars = [];
 if (!TOKEN) missingVars.push("DISCORD_TOKEN");
 if (!CLIENT_ID) missingVars.push("CLIENT_ID");
+if (!process.env.SUPABASE_URL) missingVars.push("SUPABASE_URL");
+if (!process.env.SUPABASE_KEY) missingVars.push("SUPABASE_KEY");
 
 let botEnabled = true;
-if (missingVars.length > 0) {
+if (!TOKEN || !CLIENT_ID) {
   console.warn(`⚠️ Faltan variables: ${missingVars.join(", ")} - Bot Discord desactivado`);
   botEnabled = false;
 }
@@ -114,12 +221,9 @@ const FLOOD_WINDOW_MS = 4000;
 const FLOOD_COUNT = 8;
 const FLOOD_COOLDOWN_MS = 5 * 60 * 1000;
 
-const TRUSTED_IDS = new Set([
-  // Tu propio bot
-  // (cuando el bot está listo, client.user.id existe, pero aquí aún no)
-]);
+const TRUSTED_IDS = new Set([]);
 
-const floodBuckets = new Map(); // key guild:user -> { ts: [], lastActionAt }
+const floodBuckets = new Map();
 
 function floodKey(gid, uid) {
   return `${gid}:${uid}`;
@@ -130,13 +234,11 @@ async function handleBotFlood(message) {
   const author = message.author;
   if (!guild || !author) return;
 
-  // Evitar actuar si está whitelisted
   if (TRUSTED_IDS.has(author.id)) return;
 
   const me = guild.members.me;
   if (!me) return;
 
-  // 1) Ban/Kick del bot flooder
   try {
     if (me.permissions.has(PermissionFlagsBits.BanMembers)) {
       await guild.members.ban(author.id, { reason: "Nexa Protection: bot flooding" });
@@ -153,18 +255,17 @@ async function handleBotFlood(message) {
     return;
   }
 
-  // 2) Intentar atribuir quién añadió el bot (Audit Log) y banearlo SOLO si hay evidencia
   if (!me.permissions.has(PermissionFlagsBits.ViewAuditLog)) return;
   if (!me.permissions.has(PermissionFlagsBits.BanMembers)) return;
 
   try {
-    const logs = await guild.fetchAuditLogs({
+    const auditLogs = await guild.fetchAuditLogs({
       type: AuditLogEvent.BotAdd,
       limit: 6
     });
 
-    const entry = logs.entries.find((e) => {
-      const fresh = Date.now() - e.createdTimestamp < 90_000; // 90s
+    const entry = auditLogs.entries.find((e) => {
+      const fresh = Date.now() - e.createdTimestamp < 90_000;
       const targetOk = e.target?.id === author.id;
       return fresh && targetOk;
     });
@@ -173,7 +274,7 @@ async function handleBotFlood(message) {
 
     const executorId = entry.executor.id;
 
-    if (executorId === guild.ownerId) return; // no banear owner
+    if (executorId === guild.ownerId) return;
     if (TRUSTED_IDS.has(executorId)) return;
 
     await guild.members.ban(executorId, {
@@ -192,10 +293,7 @@ async function handleBotFlood(message) {
 // ==================== BLACKLIST: DM + BAN AL ENTRAR ====================
 async function dmBanNotice(member, reason, until) {
   const untilText = until ? new Date(until).toLocaleString("es-ES") : "nunca";
-  const msg = `Has sido baneado por el sistema de proteccion Nexa.
-
-Motivo ${reason || "Sin especificar"}
-El ban se levanta en ${untilText}`;
+  const msg = `Has sido baneado por el sistema de proteccion Nexa.\n\nMotivo ${reason || "Sin especificar"}\nEl ban se levanta en ${untilText}`;
 
   try {
     await member.send({ content: msg });
@@ -210,7 +308,6 @@ client.once("ready", () => {
   addLog("info", `🌍 Bot presente en ${client.guilds.cache.size} servidores`);
   console.log("🔍 Intents configurados:", client.options.intents);
 
-  // Añadir tu propio ID a trusted cuando ya existe
   TRUSTED_IDS.add(client.user.id);
 
   client.user.setPresence({
@@ -236,7 +333,6 @@ client.on("guildDelete", (guild) => {
 
 // ==================== EVENTO GUILD MEMBER ADD (BLACKLIST + BIENVENIDA) ====================
 client.on("guildMemberAdd", async (member) => {
-  // 1) Blacklist (si aplica) -> DM + BAN + return
   try {
     const entry = getEntry(member.user);
     if (entry) {
@@ -250,17 +346,17 @@ client.on("guildMemberAdd", async (member) => {
           "warning",
           `⛔ Blacklist autoban: ${member.user.tag} (${member.id}) en ${member.guild.name} | ${entry.reason || "Sin motivo"}`
         );
+        // Guardar ban en Supabase
+        await saveBlacklistBanSupabase(member.id, member.guild.id, entry.reason || "Sin motivo");
       } else {
         addLog("error", `❌ No tengo permiso para banear (Blacklist) en ${member.guild.name}`);
       }
-      return; // IMPORTANTÍSIMO: si está en blacklist, no hay bienvenida
+      return;
     }
   } catch (e) {
     addLog("error", `❌ Blacklist autoban error: ${e.message}`);
-    // si falla la blacklist, seguimos (no retornamos)
   }
 
-  // 2) Bienvenida (tu lógica original, sin duplicados)
   if (processedWelcomes.has(member.id)) {
     console.log(`⚠️ Bienvenida para ${member.user.tag} ya procesada - IGNORANDO`);
     return;
@@ -429,6 +525,18 @@ client.on("interactionCreate", async (interaction) => {
           ]
         });
 
+        // Guardar ticket en Supabase
+        await saveTicketSupabase({
+          channel_id: ticketChannel.id,
+          guild_id: guild.id,
+          user_id: interaction.user.id,
+          username: interaction.user.tag,
+          roblox_user: robloxUser,
+          reason,
+          status: "open",
+          created_at: new Date().toISOString()
+        });
+
         const embed = new EmbedBuilder()
           .setColor("#00BFFF")
           .setTitle(`${EMOJI.TICKET} Nuevo Ticket`)
@@ -484,17 +592,24 @@ client.on("interactionCreate", async (interaction) => {
         const numeroDNI = generateDNINumber();
 
         const dniData = {
-          numeroDNI,
-          nombreCompleto,
-          fechaNacimiento,
+          numero_dni: numeroDNI,
+          nombre_completo: nombreCompleto,
+          fecha_nacimiento: fechaNacimiento,
           nacionalidad,
           direccion,
           telefono,
-          userId: interaction.user.id,
           username: interaction.user.username
         };
 
-        const success = saveDNI(interaction.user.id, dniData);
+        // Guardar DNI en Supabase (además del sistema local)
+        const successLocal = saveDNI(interaction.user.id, {
+          numeroDNI, nombreCompleto, fechaNacimiento,
+          nacionalidad, direccion, telefono,
+          userId: interaction.user.id,
+          username: interaction.user.username
+        });
+        const successSupabase = await saveDNISupabase(interaction.user.id, dniData);
+        const success = successLocal || successSupabase;
 
         if (success) {
           const embed = new EmbedBuilder()
@@ -541,6 +656,12 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       await interaction.reply({ content: `${EMOJI.CHECK} ${interaction.user} ha reclamado este ticket.` });
+
+      // Actualizar estado del ticket en Supabase
+      await supabase
+        .from("tickets")
+        .update({ status: "claimed", claimed_by: interaction.user.id, updated_at: new Date().toISOString() })
+        .eq("channel_id", interaction.channel.id);
 
       try {
         const channel = interaction.channel;
@@ -657,6 +778,25 @@ client.on("interactionCreate", async (interaction) => {
 
         const staffName = staffMember ? staffMember.tag : "No asignado";
 
+        // Guardar valoración en Supabase
+        await saveRatingSupabase({
+          channel_id: channel.id,
+          guild_id: interaction.guild.id,
+          user_id: interaction.user.id,
+          username: interaction.user.tag,
+          staff_name: staffName,
+          staff_id: staffMember?.id || null,
+          stars: parseInt(stars),
+          comment: reason,
+          ticket_name: channel.name
+        });
+
+        // Actualizar estado ticket a cerrado
+        await supabase
+          .from("tickets")
+          .update({ status: "closed", closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq("channel_id", channel.id);
+
         const ratingEmbed = new EmbedBuilder()
           .setColor(stars >= 4 ? "#00FF00" : stars >= 3 ? "#FFA500" : "#FF0000")
           .setTitle("⭐ Valoración del Ticket")
@@ -689,6 +829,14 @@ client.on("interactionCreate", async (interaction) => {
               .reverse()
               .map((m) => `[${m.createdAt.toLocaleString("es-ES")}] ${m.author.tag}: ${m.content}`)
               .join("\n");
+
+            // Guardar transcript en Supabase (tabla: ticket_transcripts)
+            await supabase.from("ticket_transcripts").insert({
+              channel_id: channel.id,
+              guild_id: interaction.guild.id,
+              transcript,
+              saved_at: new Date().toISOString()
+            });
 
             try {
               await interaction.user.send({
@@ -899,7 +1047,6 @@ async function actualizarPanelTrabajos(interaction, guildConfig) {
 // ==================== MANEJADOR DE MENSAJES (ANTI-FLOOD + IA + VERIFICACIÓN) ====================
 client.on("messageCreate", async (message) => {
   try {
-    // --- ANTI-FLOOD (se aplica también a bots) ---
     if (message.guild && message.author) {
       const guild = message.guild;
       const author = message.author;
@@ -917,14 +1064,13 @@ client.on("messageCreate", async (message) => {
 
         if (author.bot) {
           await handleBotFlood(message);
-          return; // si era bot flooder, ya actuamos
+          return;
         }
       } else {
         floodBuckets.set(key, b);
       }
     }
 
-    // --- TU LÓGICA ORIGINAL: ignorar bots para IA/verificación ---
     if (message.author.bot) return;
 
     if (processedMessages.has(message.id)) {
@@ -935,7 +1081,6 @@ client.on("messageCreate", async (message) => {
     processedMessages.add(message.id);
     setTimeout(() => processedMessages.delete(message.id), 30000);
 
-    // --- MENCIONES CON IA ---
     if (message.guild && message.mentions.has(client.user.id)) {
       if (activeAIProcessing.has(message.id)) {
         console.log(`⚠️ Mensaje ${message.id} ya está siendo procesado por IA - IGNORANDO`);
@@ -1077,6 +1222,10 @@ client.on("messageCreate", async (message) => {
             }
 
             await member.roles.add(role);
+
+            // Guardar usuario verificado en Supabase
+            await saveVerifiedUserSupabase(message.author.id, userData.email, guild.id);
+
             verificationCodes.delete(message.author.id);
 
             const embed = new EmbedBuilder()
@@ -1106,7 +1255,6 @@ client.on("messageCreate", async (message) => {
 // ==================== LOGIN DISCORD ====================
 if (botEnabled) {
   console.log("🔍 Ejecutando client.login()...");
-
   client
     .login(TOKEN)
     .then(() => console.log("✅✅✅ PROMISE DE LOGIN RESUELTA - Bot autenticado correctamente"))
