@@ -1,0 +1,14 @@
+{
+  "users": {
+    "123456789012345678": {
+      "reason": "Raid / spam",
+      "until": null
+    }
+  },
+  "bots": {
+    "234567890123456789": {
+      "reason": "Spammer bot",
+      "until": "2026-03-01T00:00:00Z"
+    }
+  }
+}
