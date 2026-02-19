@@ -14,5 +14,6 @@
     "node-fetch": "^2.7.0",
     "@sendgrid/mail": "^8.1.0",
     "groq-sdk": "^0.5.0"
+    "pg": "^8.13.0"
   }
 }
