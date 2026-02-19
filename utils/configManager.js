@@ -1,7 +1,20 @@
 const { supabase } = require("./db");
 
+const GLOBAL_GUILD_ID = "global";
+const TEST_GUILD_ID = "1353793314482028644";
+
 async function loadGuildConfig(guildId) {
-  const { data, error } = await supabase
+  // 1. Cargar config global
+  const { data: globalData } = await supabase
+    .from("guild_config")
+    .select("config")
+    .eq("guild_id", GLOBAL_GUILD_ID)
+    .single();
+
+  const globalConfig = globalData?.config || {};
+
+  // 2. Cargar config local del servidor
+  const { data: localData, error } = await supabase
     .from("guild_config")
     .select("config")
     .eq("guild_id", guildId)
@@ -9,9 +22,24 @@ async function loadGuildConfig(guildId) {
 
   if (error && error.code !== "PGRST116") {
     console.error("Error loadGuildConfig: " + error.message);
-    return null;
   }
-  return data?.config || null;
+
+  const localConfig = localData?.config || {};
+
+  // 3. Merge: local sobreescribe global por sección
+  return mergeConfigs(globalConfig, localConfig);
+}
+
+function mergeConfigs(global, local) {
+  const result = { ...global };
+  for (const key of Object.keys(local)) {
+    if (typeof local[key] === "object" && !Array.isArray(local[key]) && local[key] !== null) {
+      result[key] = { ...(global[key] || {}), ...local[key] };
+    } else {
+      result[key] = local[key];
+    }
+  }
+  return result;
 }
 
 async function saveGuildConfig(guildId, config) {
@@ -30,11 +58,29 @@ async function saveGuildConfig(guildId, config) {
   return true;
 }
 
-// updateGuildConfig: carga config actual, aplica cambios parciales y guarda
 async function updateGuildConfig(guildId, updates) {
-  const current = await loadGuildConfig(guildId) || {};
+  // Carga solo la config LOCAL (no la merged) para no duplicar la global
+  const { data } = await supabase
+    .from("guild_config")
+    .select("config")
+    .eq("guild_id", guildId)
+    .single();
+
+  const current = data?.config || {};
   const merged = { ...current, ...updates };
   return saveGuildConfig(guildId, merged);
 }
 
-module.exports = { loadGuildConfig, saveGuildConfig, updateGuildConfig };
+// Guardar en config global (aplica a todos los servidores sin config propia)
+async function updateGlobalConfig(updates) {
+  return updateGuildConfig(GLOBAL_GUILD_ID, updates);
+}
+
+module.exports = {
+  loadGuildConfig,
+  saveGuildConfig,
+  updateGuildConfig,
+  updateGlobalConfig,
+  GLOBAL_GUILD_ID,
+  TEST_GUILD_ID
+};
