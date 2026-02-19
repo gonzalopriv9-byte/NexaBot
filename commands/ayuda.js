@@ -4,7 +4,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ayuda')
-    .setDescription('Muestra la lista de comandos disponibles'),
+    .setDescription('❓Muestra la lista de comandos disponibles'),
 
   async execute(interaction) {
     const commands = interaction.client.commands;
