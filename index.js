@@ -1,4 +1,3 @@
-Hecho con Perplexity
 require("dotenv").config();
 
 const {
