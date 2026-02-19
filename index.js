@@ -1,4 +1,4 @@
-
+Hecho con Perplexity
 require("dotenv").config();
 
 const {
@@ -29,9 +29,9 @@ const { getEntry } = require("./utils/blacklist");
 
 // ==================== DEBUGGING ====================
 console.log(
-  "🔍 TOKEN detectado:",
+  "\u{1F50D} TOKEN detectado:",
   process.env.DISCORD_TOKEN
-    ? "SÍ (primeros 10 chars: " + process.env.DISCORD_TOKEN.substring(0, 10) + ")"
+    ? "SI (primeros 10 chars: " + process.env.DISCORD_TOKEN.substring(0, 10) + ")"
     : "NO"
 );
 
@@ -131,7 +131,7 @@ async function saveBlacklistBanSupabase(userId, guildId, reason) {
   if (error) addLog("error", `Supabase saveBlacklistBan: ${error.message}`);
 }
 
-// ==================== VARIABLES VERIFICACIÓN ====================
+// ==================== VARIABLES VERIFICACION ====================
 const verificationCodes = new Map();
 
 // ==================== EMOJIS ANIMADOS ====================
@@ -169,7 +169,6 @@ function addLog(type, message) {
   const emoji = { info: "📋", success: "✅", error: "❌", warning: "⚠️" };
   console.log(`${emoji[type] || "📝"} [${timestamp}] ${message}`);
 
-  // Guardar log en Supabase (sin await para no bloquear)
   saveLogSupabase(type, message).catch(() => {});
 }
 
@@ -194,7 +193,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildModeration  // Necesario para guildAuditLogEntryCreate
+    GatewayIntentBits.GuildModeration
   ]
 });
 
@@ -209,7 +208,7 @@ const processedMessages = new Set();
 const activeAIProcessing = new Map();
 const processedWelcomes = new Set();
 
-// ==================== PROTECCIÓN: ANTI-FLOOD BOTS ====================
+// ==================== PROTECCION: ANTI-FLOOD BOTS ====================
 const FLOOD_WINDOW_MS = 4000;
 const FLOOD_COUNT = 8;
 const FLOOD_COOLDOWN_MS = 5 * 60 * 1000;
@@ -235,16 +234,16 @@ async function handleBotFlood(message) {
   try {
     if (me.permissions.has(PermissionFlagsBits.BanMembers)) {
       await guild.members.ban(author.id, { reason: "Nexa Protection: bot flooding" });
-      addLog("warning", `🛑 Bot flooder baneado: ${author.tag} (${author.id}) en ${guild.name}`);
+      addLog("warning", `Bot flooder baneado: ${author.tag} (${author.id}) en ${guild.name}`);
     } else if (me.permissions.has(PermissionFlagsBits.KickMembers)) {
       await guild.members.kick(author.id, "Nexa Protection: bot flooding");
-      addLog("warning", `🛑 Bot flooder kickeado: ${author.tag} (${author.id}) en ${guild.name}`);
+      addLog("warning", `Bot flooder kickeado: ${author.tag} (${author.id}) en ${guild.name}`);
     } else {
-      addLog("error", `❌ Sin permisos para expulsar/banear bot flooder en ${guild.name}`);
+      addLog("error", `Sin permisos para expulsar/banear bot flooder en ${guild.name}`);
       return;
     }
   } catch (e) {
-    addLog("error", `❌ Error sancionando bot flooder: ${e.message}`);
+    addLog("error", `Error sancionando bot flooder: ${e.message}`);
     return;
   }
 
@@ -252,10 +251,7 @@ async function handleBotFlood(message) {
   if (!me.permissions.has(PermissionFlagsBits.BanMembers)) return;
 
   try {
-    const auditLogs = await guild.fetchAuditLogs({
-      type: AuditLogEvent.BotAdd,
-      limit: 6
-    });
+    const auditLogs = await guild.fetchAuditLogs({ type: AuditLogEvent.BotAdd, limit: 6 });
 
     const entry = auditLogs.entries.find((e) => {
       const fresh = Date.now() - e.createdTimestamp < 90_000;
@@ -266,39 +262,37 @@ async function handleBotFlood(message) {
     if (!entry?.executor) return;
 
     const executorId = entry.executor.id;
-
     if (executorId === guild.ownerId) return;
     if (TRUSTED_IDS.has(executorId)) return;
 
     await guild.members.ban(executorId, {
-      reason: `Nexa Protection: añadió bot flooder (${author.id})`
+      reason: `Nexa Protection: aniadio bot flooder (${author.id})`
     });
 
-    addLog(
-      "warning",
-      `🔨 Executor baneado por añadir bot flooder: ${entry.executor.tag} (${executorId}) en ${guild.name}`
-    );
+    addLog("warning", `Executor baneado por añadir bot flooder: ${entry.executor.tag} (${executorId}) en ${guild.name}`);
   } catch (e) {
-    addLog("error", `❌ Error audit-log atribución BotAdd: ${e.message}`);
+    addLog("error", `Error audit-log BotAdd: ${e.message}`);
   }
 }
 
 // ==================== BLACKLIST: DM + BAN AL ENTRAR ====================
 async function dmBanNotice(member, reason, until) {
   const untilText = until ? new Date(until).toLocaleString("es-ES") : "nunca";
-  const msg = `Has sido baneado por el sistema de proteccion Nexa.\n\nMotivo: ${reason || "Sin especificar"}\nEl ban se levanta en: ${untilText}`;
+  const msg = `Has sido baneado por el sistema de proteccion Nexa.
+
+Motivo: ${reason || "Sin especificar"}
+El ban se levanta en: ${untilText}`;
   try {
     await member.send({ content: msg });
   } catch {
-    // DMs cerrados: ignorar
+    // DMs cerrados
   }
 }
 
 // ==================== EVENTO READY ====================
 client.once("ready", () => {
-  addLog("success", `🎉 Bot conectado: ${client.user.tag}`);
-  addLog("info", `🌍 Bot presente en ${client.guilds.cache.size} servidores`);
-  console.log("🔍 Intents configurados:", client.options.intents);
+  addLog("success", `Bot conectado: ${client.user.tag}`);
+  addLog("info", `Bot presente en ${client.guilds.cache.size} servidores`);
 
   TRUSTED_IDS.add(client.user.id);
 
@@ -314,16 +308,16 @@ client.on("warn", (info) => addLog("warning", `Discord warning: ${info}`));
 
 // ==================== EVENTO GUILD JOIN/LEAVE ====================
 client.on("guildCreate", (guild) => {
-  addLog("success", `➕ Bot añadido a: ${guild.name} (${guild.id})`);
-  addLog("info", `👥 Total servidores: ${client.guilds.cache.size}`);
+  addLog("success", `Bot añadido a: ${guild.name} (${guild.id})`);
+  addLog("info", `Total servidores: ${client.guilds.cache.size}`);
 });
 
 client.on("guildDelete", (guild) => {
-  addLog("warning", `➖ Bot removido de: ${guild.name} (${guild.id})`);
-  addLog("info", `👥 Total servidores: ${client.guilds.cache.size}`);
+  addLog("warning", `Bot removido de: ${guild.name} (${guild.id})`);
+  addLog("info", `Total servidores: ${client.guilds.cache.size}`);
 });
 
-// ==================== DETECCIÓN BOT AÑADIDO (BLACKLIST) ====================
+// ==================== DETECCION BOT AÑADIDO (BLACKLIST) ====================
 client.on("guildAuditLogEntryCreate", async (auditLog, guild) => {
   if (auditLog.action !== AuditLogEvent.BotAdd) return;
 
@@ -331,7 +325,6 @@ client.on("guildAuditLogEntryCreate", async (auditLog, guild) => {
   if (!botId) return;
 
   try {
-    // Ignorar si es el propio bot
     if (TRUSTED_IDS.has(botId)) return;
 
     const fakeUser = { id: botId, bot: true };
@@ -341,7 +334,7 @@ client.on("guildAuditLogEntryCreate", async (auditLog, guild) => {
 
     const me = guild.members.me;
     if (!me?.permissions.has(PermissionFlagsBits.BanMembers)) {
-      addLog("error", `❌ Sin permisos para banear bot blacklisted en ${guild.name}`);
+      addLog("error", `Sin permisos para banear bot blacklisted en ${guild.name}`);
       return;
     }
 
@@ -349,29 +342,27 @@ client.on("guildAuditLogEntryCreate", async (auditLog, guild) => {
       reason: `Nexa Protection blacklist: ${entry.reason || "Sin motivo"}`
     });
 
-    addLog("warning", `⛔ Bot en blacklist baneado al añadirse: ${botId} en ${guild.name} | ${entry.reason}`);
+    addLog("warning", `Bot en blacklist baneado al añadirse: ${botId} en ${guild.name} | ${entry.reason}`);
     await saveBlacklistBanSupabase(botId, guild.id, entry.reason || "Sin motivo");
 
-    // Banear también a quien lo añadió si no es el owner ni trusted
     const executorId = auditLog.executor?.id;
     if (executorId && executorId !== guild.ownerId && !TRUSTED_IDS.has(executorId)) {
       try {
         await guild.members.ban(executorId, {
-          reason: `Nexa Protection: añadió bot en blacklist (${botId})`
+          reason: `Nexa Protection: aniadio bot en blacklist (${botId})`
         });
-        addLog("warning", `🔨 Executor baneado por añadir bot blacklisted: ${executorId} en ${guild.name}`);
+        addLog("warning", `Executor baneado por añadir bot blacklisted: ${executorId} en ${guild.name}`);
       } catch (e) {
-        addLog("error", `❌ Error baneando executor: ${e.message}`);
+        addLog("error", `Error baneando executor: ${e.message}`);
       }
     }
   } catch (e) {
-    addLog("error", `❌ Error blacklist BotAdd audit: ${e.message}`);
+    addLog("error", `Error blacklist BotAdd audit: ${e.message}`);
   }
 });
 
 // ==================== EVENTO GUILD MEMBER ADD (BLACKLIST + BIENVENIDA) ====================
 client.on("guildMemberAdd", async (member) => {
-  // 1) Blacklist -> DM + BAN + return
   try {
     const entry = getEntry(member.user);
     if (entry) {
@@ -381,43 +372,28 @@ client.on("guildMemberAdd", async (member) => {
         await member.guild.members.ban(member.id, {
           reason: `Nexa Protection blacklist: ${entry.reason || "Sin motivo"}`
         });
-        addLog(
-          "warning",
-          `⛔ Blacklist autoban: ${member.user.tag} (${member.id}) en ${member.guild.name} | ${entry.reason || "Sin motivo"}`
-        );
+        addLog("warning", `Blacklist autoban: ${member.user.tag} (${member.id}) en ${member.guild.name}`);
         await saveBlacklistBanSupabase(member.id, member.guild.id, entry.reason || "Sin motivo");
       } else {
-        addLog("error", `❌ No tengo permiso para banear (Blacklist) en ${member.guild.name}`);
+        addLog("error", `No tengo permiso para banear (Blacklist) en ${member.guild.name}`);
       }
       return;
     }
   } catch (e) {
-    addLog("error", `❌ Blacklist autoban error: ${e.message}`);
+    addLog("error", `Blacklist autoban error: ${e.message}`);
   }
 
-  // 2) Bienvenida (sin duplicados)
-  if (processedWelcomes.has(member.id)) {
-    console.log(`⚠️ Bienvenida para ${member.user.tag} ya procesada - IGNORANDO`);
-    return;
-  }
+  if (processedWelcomes.has(member.id)) return;
 
   processedWelcomes.add(member.id);
-  setTimeout(() => {
-    processedWelcomes.delete(member.id);
-    console.log(`🧹 Limpiado flag de bienvenida para ${member.user.tag}`);
-  }, 30000);
+  setTimeout(() => processedWelcomes.delete(member.id), 30000);
 
   try {
-    const guildConfig = loadGuildConfig(member.guild.id);
+    const guildConfig = await loadGuildConfig(member.guild.id);
 
-    if (!guildConfig || !guildConfig.welcome.enabled) {
-      console.log(`ℹ️ Bienvenidas desactivadas en ${member.guild.name}`);
-      return;
-    }
+    if (!guildConfig?.welcome?.enabled) return;
 
-    const WELCOME_CHANNEL_ID = guildConfig.welcome.channelId;
-    const channel = member.guild.channels.cache.get(WELCOME_CHANNEL_ID);
-
+    const channel = member.guild.channels.cache.get(guildConfig.welcome.channelId);
     if (!channel) {
       addLog("warning", `Canal de bienvenida no encontrado en ${member.guild.name}`);
       return;
@@ -430,16 +406,12 @@ client.on("guildMemberAdd", async (member) => {
     const embed = new EmbedBuilder()
       .setColor("#FFD700")
       .setTitle(`${EMOJI.MEGAFONO} ¡BIENVENIDO!`)
-      .setDescription(`**${member.user.username}** se unió al servidor`)
+      .setDescription(`**${member.user.username}** se unio al servidor`)
       .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
       .addFields(
         { name: "👤 Usuario", value: `${member}`, inline: true },
         { name: "📊 Miembro", value: `#${member.guild.memberCount}`, inline: true },
-        {
-          name: "📅 Creado",
-          value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`,
-          inline: true
-        }
+        { name: "📅 Creado", value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true }
       )
       .setFooter({ text: "Bienvenido al servidor" })
       .setTimestamp();
@@ -460,16 +432,14 @@ client.on("guildMemberAdd", async (member) => {
 // ==================== INTERACTION CREATE ====================
 client.on("interactionCreate", async (interaction) => {
   console.log(
-    `📨 Interacción recibida: ${interaction.customId || interaction.commandName} en ${
-      interaction.guild?.name || "DM"
-    }`
+    `📨 Interacción recibida: ${interaction.customId || interaction.commandName} en ${interaction.guild?.name || "DM"}`
   );
 
   try {
     // ==================== COMANDOS SLASH ====================
     if (interaction.isChatInputCommand()) {
       if (global.maintenanceMode && interaction.user.id !== MAINTENANCE_USER_ID) {
-        return interaction.reply({ content: "⚠️ El bot está en mantenimiento.", flags: 64 });
+        return interaction.reply({ content: "⚠️ El bot esta en mantenimiento.", flags: 64 });
       }
 
       const command = client.commands.get(interaction.commandName);
@@ -487,7 +457,7 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    // ==================== BOTÓN: ABRIR TICKET ====================
+    // ==================== BOTON: ABRIR TICKET ====================
     if (interaction.isButton() && interaction.customId === "open_ticket") {
       const modal = new ModalBuilder().setCustomId("ticket_modal").setTitle("📋 Crear Ticket");
 
@@ -523,13 +493,12 @@ client.on("interactionCreate", async (interaction) => {
 
       try {
         const guild = interaction.guild;
-        const guildConfig = loadGuildConfig(guild.id);
+        const guildConfig = await loadGuildConfig(guild.id);
 
-        if (!guildConfig || !guildConfig.tickets.enabled) {
+        if (!guildConfig?.tickets?.enabled) {
           return interaction.editReply({
-            content:
-              `${EMOJI.CRUZ} El sistema de tickets no está configurado en este servidor.\n` +
-              `Un administrador debe usar \`/config tickets\` primero.`
+            content: `${EMOJI.CRUZ} El sistema de tickets no esta configurado.
+Un administrador debe usar \`/config tickets\` primero.`
           });
         }
 
@@ -568,7 +537,10 @@ client.on("interactionCreate", async (interaction) => {
         const embed = new EmbedBuilder()
           .setColor("#00BFFF")
           .setTitle(`${EMOJI.TICKET} Nuevo Ticket`)
-          .setDescription(`**Roblox:** ${robloxUser}\n\n**Motivo:**\n${reason}`)
+          .setDescription(`**Roblox:** ${robloxUser}
+
+**Motivo:**
+${reason}`)
           .setFooter({ text: `Por ${interaction.user.tag}` })
           .setTimestamp();
 
@@ -606,14 +578,14 @@ client.on("interactionCreate", async (interaction) => {
         const fechaRegex = /^\d{2}\/\d{2}\/\d{4}$/;
         if (!fechaRegex.test(fechaNacimiento)) {
           return interaction.editReply({
-            content: `${EMOJI.CRUZ} Formato de fecha inválido. Usa DD/MM/AAAA (ejemplo: 15/03/1995)`
+            content: `${EMOJI.CRUZ} Formato de fecha invalido. Usa DD/MM/AAAA (ejemplo: 15/03/1995)`
           });
         }
 
         const telefonoRegex = /^\d{9,15}$/;
         if (!telefonoRegex.test(telefono.replace(/\s/g, ""))) {
           return interaction.editReply({
-            content: `${EMOJI.CRUZ} Formato de teléfono inválido. Debe contener solo números (9-15 dígitos).`
+            content: `${EMOJI.CRUZ} Formato de telefono invalido. Debe contener solo numeros (9-15 digitos).`
           });
         }
 
@@ -645,11 +617,11 @@ client.on("interactionCreate", async (interaction) => {
             .setDescription("Tu DNI ha sido registrado en la base de datos.")
             .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 128 }))
             .addFields(
-              { name: "📝 Número DNI", value: `\`${numeroDNI}\``, inline: true },
+              { name: "📝 Numero DNI", value: `\`${numeroDNI}\``, inline: true },
               { name: "👤 Nombre", value: nombreCompleto, inline: true },
               { name: "🎂 Fecha de Nacimiento", value: fechaNacimiento, inline: true },
               { name: "🌍 Nacionalidad", value: nacionalidad, inline: true },
-              { name: "📞 Teléfono", value: telefono, inline: true }
+              { name: "📞 Telefono", value: telefono, inline: true }
             )
             .setFooter({ text: "Usa /verdni para ver tu DNI completo en cualquier momento" })
             .setTimestamp();
@@ -668,10 +640,10 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    // ==================== BOTÓN: RECLAMAR TICKET ====================
+    // ==================== BOTON: RECLAMAR TICKET ====================
     if (interaction.isButton() && interaction.customId === "claim_ticket") {
-      const guildConfig = loadGuildConfig(interaction.guild.id);
-      if (!guildConfig || !guildConfig.tickets.enabled) {
+      const guildConfig = await loadGuildConfig(interaction.guild.id);
+      if (!guildConfig?.tickets?.enabled) {
         return interaction.reply({ content: `${EMOJI.CRUZ} Sistema de tickets no configurado.`, flags: 64 });
       }
 
@@ -731,10 +703,10 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    // ==================== BOTÓN: CERRAR TICKET ====================
+    // ==================== BOTON: CERRAR TICKET ====================
     if (interaction.isButton() && interaction.customId === "close_ticket") {
-      const guildConfig = loadGuildConfig(interaction.guild.id);
-      if (!guildConfig || !guildConfig.tickets.enabled) {
+      const guildConfig = await loadGuildConfig(interaction.guild.id);
+      if (!guildConfig?.tickets?.enabled) {
         return interaction.reply({ content: `${EMOJI.CRUZ} Sistema de tickets no configurado.`, flags: 64 });
       }
 
@@ -751,20 +723,20 @@ client.on("interactionCreate", async (interaction) => {
         });
       }
 
-      const modal = new ModalBuilder().setCustomId("ticket_rating_modal").setTitle("⭐ Valoración del Ticket");
+      const modal = new ModalBuilder().setCustomId("ticket_rating_modal").setTitle("⭐ Valoracion del Ticket");
 
       const starsInput = new TextInputBuilder()
         .setCustomId("rating_stars")
-        .setLabel("¿Cuántas estrellas darías? (1-5)")
+        .setLabel("¿Cuantas estrellas darias? (1-5)")
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder("Escribe un número del 1 al 5")
+        .setPlaceholder("Escribe un numero del 1 al 5")
         .setRequired(true)
         .setMinLength(1)
         .setMaxLength(1);
 
       const reasonInput = new TextInputBuilder()
         .setCustomId("rating_reason")
-        .setLabel("¿Cómo te trataron? ¿Algún comentario?")
+        .setLabel("¿Como te trataron? ¿Algun comentario?")
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder("Escribe tu experiencia...")
         .setRequired(true)
@@ -779,17 +751,22 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    // ==================== MODAL: VALORACIÓN ====================
+    // ==================== MODAL: VALORACION ====================
     if (interaction.isModalSubmit() && interaction.customId === "ticket_rating_modal") {
       const stars = interaction.fields.getTextInputValue("rating_stars");
       const reason = interaction.fields.getTextInputValue("rating_reason");
 
       if (!/^[1-5]$/.test(stars)) {
-        return interaction.reply({ content: `${EMOJI.CRUZ} Las estrellas deben ser un número entre 1 y 5.`, flags: 64 });
+        return interaction.reply({ content: `${EMOJI.CRUZ} Las estrellas deben ser un numero entre 1 y 5.`, flags: 64 });
       }
 
       const channel = interaction.channel;
-      const guildConfig = loadGuildConfig(interaction.guild.id);
+      const guildConfig = await loadGuildConfig(interaction.guild.id);
+
+      if (!guildConfig?.tickets?.enabled) {
+        return interaction.reply({ content: `${EMOJI.CRUZ} Sistema de tickets no configurado.`, flags: 64 });
+      }
+
       const STAFF_ROLES = guildConfig.tickets.staffRoles;
       const RATINGS_CHANNEL_ID = guildConfig.tickets.ratingsChannelId;
 
@@ -826,7 +803,7 @@ client.on("interactionCreate", async (interaction) => {
 
         const ratingEmbed = new EmbedBuilder()
           .setColor(stars >= 4 ? "#00FF00" : stars >= 3 ? "#FFA500" : "#FF0000")
-          .setTitle("⭐ Valoración del Ticket")
+          .setTitle("⭐ Valoracion del Ticket")
           .addFields(
             { name: "👤 Usuario", value: `${interaction.user}`, inline: true },
             { name: "🛡️ Staff", value: staffName, inline: true },
@@ -843,7 +820,7 @@ client.on("interactionCreate", async (interaction) => {
         }
 
         await interaction.reply({
-          content: `${EMOJI.CHECK} ¡Gracias por tu valoración! El ticket se cerrará en 5 segundos...`,
+          content: `${EMOJI.CHECK} ¡Gracias por tu valoracion! El ticket se cerrara en 5 segundos...`,
           embeds: [ratingEmbed]
         });
 
@@ -855,7 +832,8 @@ client.on("interactionCreate", async (interaction) => {
             const transcript = allMessages
               .reverse()
               .map((m) => `[${m.createdAt.toLocaleString("es-ES")}] ${m.author.tag}: ${m.content}`)
-              .join("\n");
+              .join("
+");
 
             await supabase.from("ticket_transcripts").insert({
               channel_id: channel.id,
@@ -867,12 +845,10 @@ client.on("interactionCreate", async (interaction) => {
             try {
               await interaction.user.send({
                 content: `📋 **Transcript del ticket ${channel.name}**`,
-                files: [
-                  {
-                    attachment: Buffer.from(transcript, "utf-8"),
-                    name: `ticket-${channel.name}-${Date.now()}.txt`
-                  }
-                ]
+                files: [{
+                  attachment: Buffer.from(transcript, "utf-8"),
+                  name: `ticket-${channel.name}-${Date.now()}.txt`
+                }]
               });
             } catch {
               addLog("warning", "No se pudo enviar transcript por DM");
@@ -884,8 +860,8 @@ client.on("interactionCreate", async (interaction) => {
           }
         }, 5000);
       } catch (error) {
-        addLog("error", `Error al procesar valoración: ${error.message}`);
-        await interaction.reply({ content: `${EMOJI.CRUZ} Error al procesar la valoración.`, flags: 64 });
+        addLog("error", `Error al procesar valoracion: ${error.message}`);
+        await interaction.reply({ content: `${EMOJI.CRUZ} Error al procesar la valoracion.`, flags: 64 });
       }
       return;
     }
@@ -893,13 +869,12 @@ client.on("interactionCreate", async (interaction) => {
     // ==================== SISTEMA DE TRABAJOS ====================
     if (interaction.isButton() && interaction.customId.startsWith("trabajo_")) {
       const trabajoSeleccionado = interaction.customId.replace("trabajo_", "");
-      const guildConfig = loadGuildConfig(interaction.guild.id);
+      const guildConfig = await loadGuildConfig(interaction.guild.id);
 
-      if (!guildConfig || !guildConfig.trabajos.enabled) {
+      if (!guildConfig?.trabajos?.enabled) {
         return interaction.reply({
-          content:
-            `${EMOJI.CRUZ} El sistema de trabajos no está configurado en este servidor.\n` +
-            `Un administrador debe usar \`/config trabajos\` primero.`,
+          content: `${EMOJI.CRUZ} El sistema de trabajos no esta configurado.
+Un administrador debe usar \`/config trabajos\` primero.`,
           flags: 64
         });
       }
@@ -920,7 +895,7 @@ client.on("interactionCreate", async (interaction) => {
         if (trabajoActual) {
           await interaction.reply({ content: `${EMOJI.CHECK} Has renunciado a tu trabajo de **${trabajoActual.nombre}**.`, flags: 64 });
         } else {
-          await interaction.reply({ content: `${EMOJI.CRUZ} No tienes ningún trabajo actualmente.`, flags: 64 });
+          await interaction.reply({ content: `${EMOJI.CRUZ} No tienes ningun trabajo actualmente.`, flags: 64 });
         }
 
         await actualizarPanelTrabajos(interaction, guildConfig);
@@ -956,15 +931,14 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    // ==================== BOTÓN: INICIAR VERIFICACIÓN ====================
+    // ==================== BOTON: INICIAR VERIFICACION ====================
     if (interaction.isButton() && interaction.customId === "verify_start") {
-      const guildConfig = loadGuildConfig(interaction.guild.id);
+      const guildConfig = await loadGuildConfig(interaction.guild.id);
 
-      if (!guildConfig || !guildConfig.verification.enabled) {
+      if (!guildConfig?.verification?.enabled) {
         return interaction.reply({
-          content:
-            `${EMOJI.CRUZ} El sistema de verificación no está configurado en este servidor.\n` +
-            `Un administrador debe usar \`/config verificacion\` primero.`,
+          content: `${EMOJI.CRUZ} El sistema de verificacion no esta configurado.
+Un administrador debe usar \`/config verificacion\` primero.`,
           flags: 64
         });
       }
@@ -972,7 +946,7 @@ client.on("interactionCreate", async (interaction) => {
       const VERIFIED_ROLE_ID = guildConfig.verification.roleId;
 
       if (interaction.member.roles.cache.has(VERIFIED_ROLE_ID)) {
-        return interaction.reply({ content: `${EMOJI.CHECK} Ya estás verificado.`, flags: 64 });
+        return interaction.reply({ content: `${EMOJI.CHECK} Ya estas verificado.`, flags: 64 });
       }
 
       try {
@@ -980,8 +954,12 @@ client.on("interactionCreate", async (interaction) => {
 
         const dmEmbed = new EmbedBuilder()
           .setColor("#5865F2")
-          .setTitle("📧 Verificación de Email")
-          .setDescription("**Paso 1:** Envía tu correo electrónico aquí.\n\nEjemplo: `micorreo@gmail.com`\n\n⚠️ Tienes 5 minutos.")
+          .setTitle("📧 Verificacion de Email")
+          .setDescription("**Paso 1:** Envia tu correo electronico aqui.
+
+Ejemplo: `micorreo@gmail.com`
+
+⚠️ Tienes 5 minutos.")
           .setTimestamp();
 
         await interaction.user.send({ embeds: [dmEmbed] });
@@ -992,7 +970,7 @@ client.on("interactionCreate", async (interaction) => {
           timestamp: Date.now()
         });
 
-        addLog("info", `Verificación iniciada: ${interaction.user.tag} en ${interaction.guild.name}`);
+        addLog("info", `Verificacion iniciada: ${interaction.user.tag} en ${interaction.guild.name}`);
       } catch (error) {
         addLog("error", `Error MD: ${error.message}`);
         return interaction.editReply({ content: `${EMOJI.CRUZ} No puedo enviarte mensajes directos.` }).catch(() => {});
@@ -1001,14 +979,14 @@ client.on("interactionCreate", async (interaction) => {
     }
   } catch (error) {
     if (error.code === 10062) {
-      addLog("warning", "Interacción expirada");
+      addLog("warning", "Interaccion expirada");
       return;
     }
-    addLog("error", `Error interacción: ${error.message}`);
+    addLog("error", `Error interaccion: ${error.message}`);
   }
 });
 
-// ==================== FUNCIÓN ACTUALIZAR PANEL TRABAJOS ====================
+// ==================== FUNCION ACTUALIZAR PANEL TRABAJOS ====================
 async function actualizarPanelTrabajos(interaction, guildConfig) {
   try {
     const guild = interaction.guild;
@@ -1022,20 +1000,29 @@ async function actualizarPanelTrabajos(interaction, guildConfig) {
 
     const trabajosList = Object.entries(TRABAJOS)
       .map(([key, trabajo]) => `${trabajo.emoji} **${trabajo.nombre}:** \`${contadores[key]}\` personas`)
-      .join("\n");
+      .join("
+");
 
     const embed = new EmbedBuilder()
       .setColor("#00BFFF")
       .setTitle("💼 CENTRO DE EMPLEO")
       .setDescription(
-        "Selecciona tu trabajo haciendo clic en el botón correspondiente.\n\n" +
-          "**📊 Personal actual por departamento:**\n" +
+        "Selecciona tu trabajo haciendo clic en el boton correspondiente.
+
+" +
+          "**📊 Personal actual por departamento:**
+" +
           trabajosList +
-          "\n\n" +
-          "⚠️ **Importante:**\n" +
-          "• Solo puedes tener un trabajo a la vez\n" +
-          "• Al seleccionar un trabajo nuevo, perderás el anterior\n" +
-          "• El panel se actualiza automáticamente"
+          "
+
+" +
+          "⚠️ **Importante:**
+" +
+          "• Solo puedes tener un trabajo a la vez
+" +
+          "• Al seleccionar un trabajo nuevo, perderas el anterior
+" +
+          "• El panel se actualiza automaticamente"
       )
       .setFooter({ text: "Sistema de empleos" })
       .setTimestamp();
@@ -1052,7 +1039,10 @@ async function actualizarPanelTrabajos(interaction, guildConfig) {
             .setCustomId(`trabajo_${key}`)
             .setLabel(`${trabajo.emoji} ${trabajo.nombre} (${contadores[key]})`)
             .setStyle(
-              j % 4 === 0 ? ButtonStyle.Primary : j % 4 === 1 ? ButtonStyle.Danger : j % 4 === 2 ? ButtonStyle.Secondary : ButtonStyle.Success
+              j % 4 === 0 ? ButtonStyle.Primary
+                : j % 4 === 1 ? ButtonStyle.Danger
+                : j % 4 === 2 ? ButtonStyle.Secondary
+                : ButtonStyle.Success
             )
         );
       }
@@ -1070,7 +1060,7 @@ async function actualizarPanelTrabajos(interaction, guildConfig) {
   }
 }
 
-// ==================== MANEJADOR DE MENSAJES (ANTI-FLOOD + IA + VERIFICACIÓN) ====================
+// ==================== MANEJADOR DE MENSAJES (ANTI-FLOOD + IA + VERIFICACION) ====================
 client.on("messageCreate", async (message) => {
   try {
     if (message.guild && message.author) {
@@ -1099,20 +1089,14 @@ client.on("messageCreate", async (message) => {
 
     if (message.author.bot) return;
 
-    if (processedMessages.has(message.id)) {
-      console.log(`⚠️ Mensaje ${message.id} ya fue procesado - IGNORANDO`);
-      return;
-    }
+    if (processedMessages.has(message.id)) return;
 
     processedMessages.add(message.id);
     setTimeout(() => processedMessages.delete(message.id), 30000);
 
     // --- MENCIONES CON IA ---
     if (message.guild && message.mentions.has(client.user.id)) {
-      if (activeAIProcessing.has(message.id)) {
-        console.log(`⚠️ Mensaje ${message.id} ya está siendo procesado por IA - IGNORANDO`);
-        return;
-      }
+      if (activeAIProcessing.has(message.id)) return;
 
       activeAIProcessing.set(message.id, true);
 
@@ -1159,7 +1143,7 @@ client.on("messageCreate", async (message) => {
           for (const chunk of chunks) await message.channel.send(chunk);
         }
 
-        addLog("success", `IA respondió a ${message.author.tag} en ${message.guild.name}`);
+        addLog("success", `IA respondio a ${message.author.tag} en ${message.guild.name}`);
       } catch (error) {
         addLog("error", `Error IA: ${error.message}`);
         await message.reply(`${EMOJI.CRUZ} Error procesando tu pregunta.`).catch(() => {});
@@ -1170,7 +1154,7 @@ client.on("messageCreate", async (message) => {
       return;
     }
 
-    // --- VERIFICACIÓN POR EMAIL (solo en DM) ---
+    // --- VERIFICACION POR EMAIL (solo en DM) ---
     if (!message.guild) {
       const userData = verificationCodes.get(message.author.id);
       if (!userData) return;
@@ -1185,19 +1169,19 @@ client.on("messageCreate", async (message) => {
         if (userData.step === "waiting_email") {
           const email = message.content.trim();
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(email)) return message.reply(`${EMOJI.CRUZ} Email inválido.`);
+          if (!emailRegex.test(email)) return message.reply(`${EMOJI.CRUZ} Email invalido.`);
 
           const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
           await sgMail.send({
             to: email,
             from: process.env.SENDGRID_FROM_EMAIL,
-            subject: "Código de Verificación - Discord",
+            subject: "Codigo de Verificacion - Discord",
             html: `
               <div style="font-family: Arial, sans-serif;">
-                <h2>🔐 Verificación Discord</h2>
+                <h2>Verificacion Discord</h2>
                 <p>Hola <strong>${message.author.username}</strong>,</p>
-                <p>Tu código:</p>
+                <p>Tu codigo:</p>
                 <div style="background: #f0f0f0; padding: 20px; text-align: center; font-size: 32px; font-weight: bold;">
                   ${verificationCode}
                 </div>
@@ -1216,17 +1200,18 @@ client.on("messageCreate", async (message) => {
 
           const embed = new EmbedBuilder()
             .setColor("#00FF00")
-            .setTitle(`${EMOJI.CHECK} Código Enviado`)
-            .setDescription(`Código enviado a **${email}**. Revisa spam.\n\nEnvía el código de 6 dígitos.`)
-            .setThumbnail("https://cdn.discordapp.com/emojis/1472550293152596000.gif?size=128&quality=lossless")
+            .setTitle(`${EMOJI.CHECK} Codigo Enviado`)
+            .setDescription(`Codigo enviado a **${email}**. Revisa spam.
+
+Envia el codigo de 6 digitos.`)
             .setTimestamp();
 
           await message.reply({ embeds: [embed] });
-          addLog("success", `Código enviado a ${email}`);
+          addLog("success", `Codigo enviado a ${email}`);
 
         } else if (userData.step === "waiting_code") {
           const inputCode = message.content.trim();
-          if (!/^\d{6}$/.test(inputCode)) return message.reply(`${EMOJI.CRUZ} Código inválido. 6 dígitos.`);
+          if (!/^\d{6}$/.test(inputCode)) return message.reply(`${EMOJI.CRUZ} Codigo invalido. 6 digitos.`);
 
           if (inputCode === userData.code) {
             const guild = client.guilds.cache.get(userData.guildId);
@@ -1235,10 +1220,10 @@ client.on("messageCreate", async (message) => {
               return message.reply(`${EMOJI.CRUZ} Servidor no encontrado.`);
             }
 
-            const guildConfig = loadGuildConfig(guild.id);
-            if (!guildConfig || !guildConfig.verification.enabled) {
+            const guildConfig = await loadGuildConfig(guild.id);
+            if (!guildConfig?.verification?.enabled) {
               verificationCodes.delete(message.author.id);
-              return message.reply(`${EMOJI.CRUZ} Sistema de verificación no configurado en el servidor.`);
+              return message.reply(`${EMOJI.CRUZ} Sistema de verificacion no configurado en el servidor.`);
             }
 
             const member = await guild.members.fetch(message.author.id);
@@ -1250,26 +1235,27 @@ client.on("messageCreate", async (message) => {
             }
 
             await member.roles.add(role);
-
             await saveVerifiedUserSupabase(message.author.id, userData.email, guild.id);
 
             verificationCodes.delete(message.author.id);
 
             const embed = new EmbedBuilder()
               .setColor("#00FF00")
-              .setTitle(`${EMOJI.CHECK} Verificación Completada`)
-              .setDescription(`¡Felicidades **${message.author.username}**!\n\nVerificado exitosamente.`)
+              .setTitle(`${EMOJI.CHECK} Verificacion Completada`)
+              .setDescription(`¡Felicidades **${message.author.username}**!
+
+Verificado exitosamente.`)
               .setFooter({ text: guild.name })
               .setTimestamp();
 
             await message.reply({ embeds: [embed] });
             addLog("success", `Usuario verificado: ${message.author.tag} en ${guild.name}`);
           } else {
-            await message.reply(`${EMOJI.CRUZ} Código incorrecto.`);
+            await message.reply(`${EMOJI.CRUZ} Codigo incorrecto.`);
           }
         }
       } catch (error) {
-        addLog("error", `Error verificación: ${error.message}`);
+        addLog("error", `Error verificacion: ${error.message}`);
         verificationCodes.delete(message.author.id);
         await message.reply(`${EMOJI.CRUZ} Error. Intenta de nuevo.`).catch(() => {});
       }
@@ -1281,15 +1267,12 @@ client.on("messageCreate", async (message) => {
 
 // ==================== LOGIN DISCORD ====================
 if (botEnabled) {
-  console.log("🔍 Ejecutando client.login()...");
+  console.log("Ejecutando client.login()...");
   client
     .login(TOKEN)
-    .then(() => console.log("✅✅✅ PROMISE DE LOGIN RESUELTA - Bot autenticado correctamente"))
+    .then(() => console.log("✅ Bot autenticado correctamente"))
     .catch((err) => {
-      console.error("❌❌❌ ERROR EN LOGIN:");
-      console.error("Tipo:", err.name);
-      console.error("Código:", err.code);
-      console.error("Mensaje:", err.message);
+      console.error("ERROR EN LOGIN:", err.name, err.code, err.message);
     });
 } else {
   console.log("⚠️ Bot Discord no iniciado (faltan variables de entorno)");
