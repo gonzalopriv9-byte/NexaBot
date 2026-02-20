@@ -4,6 +4,7 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
+    "build": "node deploy-commands.js",
     "start": "node index.js"
   },
   "dependencies": {
