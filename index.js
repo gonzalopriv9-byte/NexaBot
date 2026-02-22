@@ -853,9 +853,13 @@ client.on("messageCreate", async (message) => {
 // ==================== LOGIN ====================
 if (botEnabled) {
   client.login(TOKEN)
-    .then(() => console.log("Bot autenticado correctamente"))
-    .catch((err) => console.error("ERROR LOGIN:", err.message));
-} else {
+  .then(() => console.log("Bot autenticado correctamente"))
+  .catch((err) => {
+    console.error("ERROR LOGIN:", err.message);
+    console.error("Token usado (primeros 20):", TOKEN?.substring(0, 20));
+    process.exit(1);
+  });
+ else {
   console.log("Bot no iniciado - faltan variables de entorno");
 }
 
