@@ -850,6 +850,12 @@ client.on("messageCreate", async (message) => {
   }
 });
 
+console.log("Intentando login...");
+console.log("botEnabled:", botEnabled);
+console.log("TOKEN length:", TOKEN?.length);
+console.log("CLIENT_ID:", CLIENT_ID);
+
+
 // ==================== LOGIN ====================
 if (botEnabled) {
   client.login(TOKEN)
