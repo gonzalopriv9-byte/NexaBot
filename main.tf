@@ -14,7 +14,6 @@ provider "oci" {
 
 # Ejemplo simple - Compute Instance para ejecutar Nexa-Bot
 resource "oci_core_instance" "nexa_bot" {
-  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
   compartment_id      = var.compartment_id
   
   display_name = "nexa-bot-instance"
@@ -43,9 +42,6 @@ resource "oci_core_instance" "nexa_bot" {
   }
 }
 
-data "oci_identity_availability_domains" "ads" {
-  compartment_id = var.compartment_id
-}
 
 output "instance_public_ip" {
   value       = oci_core_instance.nexa_bot.public_ip
