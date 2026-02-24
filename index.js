@@ -25,6 +25,7 @@ const { createClient } = require("@supabase/supabase-js");
 const { saveDNI, generateDNINumber } = require("./utils/database");
 const { loadGuildConfig } = require("./utils/configManager");
 const { getEntry } = require("./utils/blacklist");
+const { checkAndRunAutoBackups } = require("./utils/autoBackupScheduler");
 
 // ==================== DEBUGGING ====================
 console.log(
@@ -217,6 +218,30 @@ client.once("ready", () => {
   addLog("info", "Servidores: " + client.guilds.cache.size);
   TRUSTED_IDS.add(client.user.id);
   client.user.setPresence({ status: "online", activities: [{ name: "EN PRUEBAS", type: 0 }] });
+
+  // ==================== SISTEMA DE BACKUP AUTOMATICO ====================
+  // Verifica cada 10 minutos si algún servidor necesita backup automático
+  const AUTO_BACKUP_CHECK_INTERVAL = 10 * 60 * 1000; // 10 minutos
+  
+  setInterval(async () => {
+    try {
+      await checkAndRunAutoBackups(client, addLog);
+    } catch (e) {
+      addLog("error", "Error en intervalo de autobackup: " + e.message);
+    }
+  }, AUTO_BACKUP_CHECK_INTERVAL);
+
+  // Primera ejecución al iniciar (tras 1 minuto para que el bot esté completamente listo)
+  setTimeout(async () => {
+    try {
+      addLog("info", "Verificando backups automáticos pendientes...");
+      await checkAndRunAutoBackups(client, addLog);
+    } catch (e) {
+      addLog("error", "Error en primera verificación de autobackup: " + e.message);
+    }
+  }, 60000);
+
+  addLog("success", "Sistema de backup automático inicializado");
 });
 
 client.on("error", (error) => addLog("error", "Discord error: " + error.message));
@@ -269,7 +294,7 @@ client.on("guildMemberAdd", async (member) => {
       }
       return;
     }
-    // ─────────────────────
+    // ─────────────────
 
     const entry = getEntry(member.user);
     if (entry) {
