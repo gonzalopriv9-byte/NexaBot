@@ -15,6 +15,7 @@ provider "oci" {
 # Ejemplo simple - Compute Instance para ejecutar Nexa-Bot
 resource "oci_core_instance" "nexa_bot" {
   compartment_id      = var.compartment_id
+  availability_domain = "rEST:EU-MADRID-1-AD-1"
   
   display_name = "nexa-bot-instance"
   shape        = "VM.Standard.E2.1.Micro"  # Free tier elegible
