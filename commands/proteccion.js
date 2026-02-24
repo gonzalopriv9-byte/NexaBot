@@ -1,396 +1,261 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  EmbedBuilder
+} = require("discord.js");
 const { loadGuildConfig, updateGuildConfig } = require("../utils/configManager");
-const { DEFAULT_PROTECTION, enableRaidMode, disableRaidMode, isRaidModeActive } = require("../utils/protectionManager");
+const { enableRaidMode, disableRaidMode, checkRaidMode } = require("../utils/protectionManager");
+
+const EMOJI = {
+  CHECK: "<a:Check:1472540340584972509>",
+  CRUZ: "<a:Cruz:1472540885102235689>",
+  SHIELD: "🛡️"
+};
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("proteccion")
-    .setDescription("🔒 Configurar sistema de protección anti-raid")
+    .setDescription("Sistema de protección anti-nuke y anti-raid")
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(sub =>
-      sub.setName("estado")
-        .setDescription("📊 Ver estado del sistema de protección")
-    )
-    .addSubcommand(sub =>
-      sub.setName("activar")
-        .setDescription("✅ Activar sistema de protección")
-    )
-    .addSubcommand(sub =>
-      sub.setName("desactivar")
-        .setDescription("❌ Desactivar sistema de protección")
-    )
-    .addSubcommand(sub =>
       sub.setName("anti-nuke")
-        .setDescription("🚨 Configurar anti-nuke (roles, canales, bans, kicks)")
-        .addIntegerOption(opt => opt.setName("max_roles_crear").setDescription("Máx roles creados/min").setMinValue(1).setMaxValue(10))
-        .addIntegerOption(opt => opt.setName("max_roles_borrar").setDescription("Máx roles borrados/min").setMinValue(1).setMaxValue(10))
-        .addIntegerOption(opt => opt.setName("max_canales_crear").setDescription("Máx canales creados/min").setMinValue(1).setMaxValue(20))
-        .addIntegerOption(opt => opt.setName("max_canales_borrar").setDescription("Máx canales borrados/min").setMinValue(1).setMaxValue(20))
-        .addIntegerOption(opt => opt.setName("max_bans").setDescription("Máx bans/min").setMinValue(1).setMaxValue(10))
-        .addIntegerOption(opt => opt.setName("max_kicks").setDescription("Máx kicks/min").setMinValue(1).setMaxValue(10))
-        .addStringOption(opt => opt.setName("accion").setDescription("Acción al detectar").addChoices(
-          { name: "Ban", value: "ban" },
-          { name: "Kick", value: "kick" },
-          { name: "Cuarentena", value: "quarantine" }
-        ))
-    )
+        .setDescription("Configurar límites anti-nuke")
+        .addStringOption(opt =>
+          opt.setName("accion")
+            .setDescription("¿Qué acción configurar?")
+            .setRequired(true)
+            .addChoices(
+              { name: "Habilitar/Deshabilitar", value: "toggle" },
+              { name: "Configurar límites", value: "limits" },
+              { name: "Ver estado", value: "status" }
+            )))
     .addSubcommand(sub =>
       sub.setName("raid-mode")
-        .setDescription("🚨 Gestionar modo raid")
-        .addStringOption(opt => opt.setName("estado").setDescription("Activar/desactivar").setRequired(true).addChoices(
-          { name: "Activar", value: "on" },
-          { name: "Desactivar", value: "off" }
-        ))
-        .addIntegerOption(opt => opt.setName("duracion").setDescription("Duración en minutos (solo si activas)").setMinValue(1).setMaxValue(1440))
-    )
+        .setDescription("Activar/desactivar modo raid")
+        .addStringOption(opt =>
+          opt.setName("estado")
+            .setDescription("Activar o desactivar")
+            .setRequired(true)
+            .addChoices(
+              { name: "Activar", value: "on" },
+              { name: "Desactivar", value: "off" }
+            ))
+        .addIntegerOption(opt =>
+          opt.setName("duracion")
+            .setDescription("Duración en minutos (dejar vacío = indefinido)")
+            .setRequired(false)
+            .setMinValue(1)
+            .setMaxValue(1440)))
     .addSubcommand(sub =>
-      sub.setName("anti-links")
-        .setDescription("🔗 Configurar anti-links")
-        .addBooleanOption(opt => opt.setName("activar").setDescription("Activar/desactivar").setRequired(true))
-        .addStringOption(opt => opt.setName("accion").setDescription("Acción al detectar").addChoices(
-          { name: "Borrar mensaje", value: "delete" },
-          { name: "Warn", value: "warn" },
-          { name: "Timeout", value: "timeout" }
-        ))
-    )
+      sub.setName("limites")
+        .setDescription("Configurar límites de acciones anti-nuke")
+        .addIntegerOption(opt =>
+          opt.setName("roles_crear")
+            .setDescription("Máximo de roles creados por minuto")
+            .setMinValue(1)
+            .setMaxValue(20))
+        .addIntegerOption(opt =>
+          opt.setName("roles_borrar")
+            .setDescription("Máximo de roles borrados por minuto")
+            .setMinValue(1)
+            .setMaxValue(20))
+        .addIntegerOption(opt =>
+          opt.setName("canales_crear")
+            .setDescription("Máximo de canales creados por minuto")
+            .setMinValue(1)
+            .setMaxValue(20))
+        .addIntegerOption(opt =>
+          opt.setName("canales_borrar")
+            .setDescription("Máximo de canales borrados por minuto")
+            .setMinValue(1)
+            .setMaxValue(20))
+        .addIntegerOption(opt =>
+          opt.setName("bans")
+            .setDescription("Máximo de bans por minuto")
+            .setMinValue(1)
+            .setMaxValue(20))
+        .addIntegerOption(opt =>
+          opt.setName("kicks")
+            .setDescription("Máximo de kicks por minuto")
+            .setMinValue(1)
+            .setMaxValue(20)))
     .addSubcommand(sub =>
-      sub.setName("anti-menciones")
-        .setDescription("🔔 Configurar anti-menciones masivas")
-        .addBooleanOption(opt => opt.setName("activar").setDescription("Activar/desactivar").setRequired(true))
-        .addIntegerOption(opt => opt.setName("max_menciones").setDescription("Máx menciones por mensaje").setMinValue(1).setMaxValue(20))
-        .addBooleanOption(opt => opt.setName("bloquear_everyone").setDescription("Bloquear @everyone/@here"))
-        .addStringOption(opt => opt.setName("accion").setDescription("Acción al detectar").addChoices(
-          { name: "Borrar mensaje", value: "delete" },
-          { name: "Warn", value: "warn" },
-          { name: "Timeout", value: "timeout" },
-          { name: "Kick", value: "kick" }
-        ))
-    )
-    .addSubcommand(sub =>
-      sub.setName("anti-alts")
-        .setDescription("🚫 Configurar anti-alts (cuentas nuevas)")
-        .addBooleanOption(opt => opt.setName("activar").setDescription("Activar/desactivar").setRequired(true))
-        .addIntegerOption(opt => opt.setName("dias_minimos").setDescription("Días mínimos de cuenta").setMinValue(1).setMaxValue(365))
-        .addStringOption(opt => opt.setName("modo").setDescription("Acción al detectar").addChoices(
-          { name: "Permitir (solo log)", value: "allow" },
-          { name: "Timeout", value: "timeout" },
-          { name: "Kick", value: "kick" },
-          { name: "Ban", value: "ban" },
-          { name: "Cuarentena", value: "quarantine" }
-        ))
-    )
-    .addSubcommand(sub =>
-      sub.setName("cuarentena")
-        .setDescription("🔒 Configurar rol de cuarentena")
-        .addRoleOption(opt => opt.setName("rol").setDescription("Rol de cuarentena").setRequired(true))
-        .addChannelOption(opt => opt.setName("canal").setDescription("Canal donde pueden leer/apelar"))
-    )
-    .addSubcommand(sub =>
-      sub.setName("auto-punish")
-        .setDescription("⚠️ Configurar sanciones automáticas por warns")
-        .addBooleanOption(opt => opt.setName("activar").setDescription("Activar/desactivar").setRequired(true))
-    ),
+      sub.setName("estado")
+        .setDescription("Ver estado actual de la protección")),
 
   async execute(interaction) {
-    const subcommand = interaction.options.getSubcommand();
-    const config = await loadGuildConfig(interaction.guild.id);
+    const sub = interaction.options.getSubcommand();
+    await interaction.deferReply({ flags: 64 });
 
-    // Inicializar protección si no existe
-    if (!config.protection) {
-      await updateGuildConfig(interaction.guild.id, {
-        protection: DEFAULT_PROTECTION
-      });
+    const guildId = interaction.guild.id;
+
+    // ==================== ANTI-NUKE ====================
+    if (sub === "anti-nuke") {
+      const accion = interaction.options.getString("accion");
+      const config = await loadGuildConfig(guildId);
+
+      if (accion === "toggle") {
+        const currentState = config?.protection?.antiNuke?.enabled || false;
+        const newState = !currentState;
+
+        await updateGuildConfig(guildId, {
+          protection: {
+            ...(config.protection || {}),
+            antiNuke: {
+              ...(config.protection?.antiNuke || {}),
+              enabled: newState
+            }
+          }
+        });
+
+        const embed = new EmbedBuilder()
+          .setColor(newState ? "#00FF00" : "#FF6B6B")
+          .setTitle(EMOJI.SHIELD + " Anti-Nuke " + (newState ? "Activado" : "Desactivado"))
+          .setDescription(
+            newState
+              ? "El sistema anti-nuke está ahora **activo**. Se detectarán acciones masivas sospechosas."
+              : "El sistema anti-nuke está ahora **desactivado**."
+          )
+          .setTimestamp();
+
+        return interaction.editReply({ embeds: [embed] });
+      }
+
+      if (accion === "status") {
+        const antiNuke = config?.protection?.antiNuke;
+        const enabled = antiNuke?.enabled || false;
+        const limits = antiNuke?.limits || {};
+
+        const embed = new EmbedBuilder()
+          .setColor(enabled ? "#00FF00" : "#95A5A6")
+          .setTitle(EMOJI.SHIELD + " Estado Anti-Nuke")
+          .setDescription("Estado: **" + (enabled ? "Activo" : "Desactivado") + "**")
+          .addFields(
+            { name: "🛡️ Roles Crear", value: "" + (limits.roleCreate || 3), inline: true },
+            { name: "🛡️ Roles Borrar", value: "" + (limits.roleDelete || 3), inline: true },
+            { name: "🛡️ Canales Crear", value: "" + (limits.channelCreate || 3), inline: true },
+            { name: "🛡️ Canales Borrar", value: "" + (limits.channelDelete || 3), inline: true },
+            { name: "🛡️ Bans", value: "" + (limits.ban || 3), inline: true },
+            { name: "🛡️ Kicks", value: "" + (limits.kick || 3), inline: true }
+          )
+          .setFooter({ text: "Usa /proteccion limites para cambiar" })
+          .setTimestamp();
+
+        return interaction.editReply({ embeds: [embed] });
+      }
     }
 
-    switch (subcommand) {
-      case "estado":
-        await showStatus(interaction, config);
-        break;
-      case "activar":
-        await enableProtection(interaction);
-        break;
-      case "desactivar":
-        await disableProtection(interaction);
-        break;
-      case "anti-nuke":
-        await configureAntiNuke(interaction, config);
-        break;
-      case "raid-mode":
-        await configureRaidMode(interaction);
-        break;
-      case "anti-links":
-        await configureAntiLinks(interaction, config);
-        break;
-      case "anti-menciones":
-        await configureAntiMentions(interaction, config);
-        break;
-      case "anti-alts":
-        await configureAntiAlts(interaction, config);
-        break;
-      case "cuarentena":
-        await configureQuarantine(interaction, config);
-        break;
-      case "auto-punish":
-        await configureAutoPunish(interaction, config);
-        break;
+    // ==================== RAID MODE ====================
+    if (sub === "raid-mode") {
+      const estado = interaction.options.getString("estado");
+      const duracion = interaction.options.getInteger("duracion");
+
+      if (estado === "on") {
+        await enableRaidMode(guildId, duracion, null);
+
+        const embed = new EmbedBuilder()
+          .setColor("#FF0000")
+          .setTitle("🚨 Modo Raid Activado")
+          .setDescription(
+            "El servidor está ahora en **Modo Raid**.\n\n" +
+            "• Protección máxima contra ataques\n" +
+            "• Acciones sospechosas serán bloqueadas automáticamente\n" +
+            (duracion ? `• Se desactivará automáticamente en **${duracion} minutos**` : "• Permanecerá activo hasta que lo desactives manualmente")
+          )
+          .setTimestamp();
+
+        return interaction.editReply({ embeds: [embed] });
+      }
+
+      if (estado === "off") {
+        await disableRaidMode(guildId, null);
+
+        const embed = new EmbedBuilder()
+          .setColor("#00FF00")
+          .setTitle(EMOJI.CHECK + " Modo Raid Desactivado")
+          .setDescription("El servidor ha vuelto a la normalidad.")
+          .setTimestamp();
+
+        return interaction.editReply({ embeds: [embed] });
+      }
+    }
+
+    // ==================== LIMITES ====================
+    if (sub === "limites") {
+      const config = await loadGuildConfig(guildId);
+      const currentLimits = config?.protection?.antiNuke?.limits || {};
+
+      const newLimits = {
+        roleCreate: interaction.options.getInteger("roles_crear") || currentLimits.roleCreate || 3,
+        roleDelete: interaction.options.getInteger("roles_borrar") || currentLimits.roleDelete || 3,
+        channelCreate: interaction.options.getInteger("canales_crear") || currentLimits.channelCreate || 3,
+        channelDelete: interaction.options.getInteger("canales_borrar") || currentLimits.channelDelete || 3,
+        ban: interaction.options.getInteger("bans") || currentLimits.ban || 3,
+        kick: interaction.options.getInteger("kicks") || currentLimits.kick || 3
+      };
+
+      await updateGuildConfig(guildId, {
+        protection: {
+          ...(config.protection || {}),
+          antiNuke: {
+            ...(config.protection?.antiNuke || {}),
+            limits: newLimits
+          }
+        }
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor("#00FF00")
+        .setTitle(EMOJI.CHECK + " Límites Anti-Nuke Actualizados")
+        .setDescription("Los nuevos límites se han guardado correctamente.")
+        .addFields(
+          { name: "Roles Crear", value: "" + newLimits.roleCreate, inline: true },
+          { name: "Roles Borrar", value: "" + newLimits.roleDelete, inline: true },
+          { name: "Canales Crear", value: "" + newLimits.channelCreate, inline: true },
+          { name: "Canales Borrar", value: "" + newLimits.channelDelete, inline: true },
+          { name: "Bans", value: "" + newLimits.ban, inline: true },
+          { name: "Kicks", value: "" + newLimits.kick, inline: true }
+        )
+        .setTimestamp();
+
+      return interaction.editReply({ embeds: [embed] });
+    }
+
+    // ==================== ESTADO ====================
+    if (sub === "estado") {
+      const config = await loadGuildConfig(guildId);
+      const antiNuke = config?.protection?.antiNuke;
+      const raidMode = config?.protection?.raidMode;
+
+      const embed = new EmbedBuilder()
+        .setColor("#00BFFF")
+        .setTitle(EMOJI.SHIELD + " Estado de Protección")
+        .addFields(
+          {
+            name: "🛡️ Anti-Nuke",
+            value: antiNuke?.enabled ? "✅ **Activo**" : "❌ **Inactivo**",
+            inline: true
+          },
+          {
+            name: "🚨 Modo Raid",
+            value: raidMode?.enabled
+              ? "✅ **Activo**" + (raidMode.endsAt ? " (temporal)" : " (indefinido)")
+              : "❌ **Inactivo**",
+            inline: true
+          }
+        )
+        .setFooter({ text: "Servidor: " + interaction.guild.name })
+        .setTimestamp();
+
+      if (raidMode?.enabled && raidMode.endsAt) {
+        embed.addFields({
+          name: "⏱️ Finaliza",
+          value: "<t:" + Math.floor(new Date(raidMode.endsAt).getTime() / 1000) + ":R>",
+          inline: true
+        });
+      }
+
+      return interaction.editReply({ embeds: [embed] });
     }
   }
 };
-
-async function showStatus(interaction, config) {
-  const protection = config.protection || DEFAULT_PROTECTION;
-  const raidActive = await isRaidModeActive(interaction.guild.id);
-
-  const embed = new EmbedBuilder()
-    .setColor(protection.enabled ? "#00FF00" : "#FF0000")
-    .setTitle("🔒 Estado del Sistema de Protección")
-    .setDescription(`**Estado general:** ${protection.enabled ? "✅ Activado" : "❌ Desactivado"}`)
-    .addFields(
-      {
-        name: "🚨 Anti-Nuke",
-        value: `${protection.antiNuke?.enabled ? "✅" : "❌"} Roles: ${protection.antiNuke?.maxRoleCreate}/${protection.antiNuke?.maxRoleDelete} | Canales: ${protection.antiNuke?.maxChannelCreate}/${protection.antiNuke?.maxChannelDelete}\nBans: ${protection.antiNuke?.maxBan} | Kicks: ${protection.antiNuke?.maxKick}\nAcción: **${protection.antiNuke?.action || "ban"}**`,
-        inline: false
-      },
-      {
-        name: "🚨 Modo Raid",
-        value: raidActive ? `✅ **ACTIVO**\nAuto-enable: ${protection.raidMode?.autoEnable ? "Sí" : "No"}` : `❌ Inactivo\nAuto-enable: ${protection.raidMode?.autoEnable ? "Sí" : "No"}`,
-        inline: true
-      },
-      {
-        name: "🔗 Anti-Links",
-        value: protection.antiLinks?.enabled ? `✅ Activado\nAcción: **${protection.antiLinks?.action}**` : "❌ Desactivado",
-        inline: true
-      },
-      {
-        name: "🔔 Anti-Menciones",
-        value: protection.antiMentions?.enabled ? `✅ Activado\nMáx: ${protection.antiMentions?.maxMentionsUser}\n@everyone: ${protection.antiMentions?.blockEveryone ? "Bloqueado" : "Permitido"}` : "❌ Desactivado",
-        inline: true
-      },
-      {
-        name: "🚫 Anti-Alts",
-        value: protection.antiAlts?.enabled ? `✅ Activado\nMínimo: ${protection.antiAlts?.minAccountAgeDays} días\nModo: **${protection.antiAlts?.mode}**` : "❌ Desactivado",
-        inline: true
-      },
-      {
-        name: "🔒 Cuarentena",
-        value: protection.quarantine?.roleId ? `Rol: <@&${protection.quarantine.roleId}>` : "❌ No configurado",
-        inline: true
-      },
-      {
-        name: "⚠️ Auto-Punish",
-        value: protection.autoPunish?.enabled ? "✅ Activado" : "❌ Desactivado",
-        inline: true
-      }
-    )
-    .setFooter({ text: `Servidor: ${interaction.guild.name}` })
-    .setTimestamp();
-
-  await interaction.reply({ embeds: [embed], ephemeral: true });
-}
-
-async function enableProtection(interaction) {
-  const config = await loadGuildConfig(interaction.guild.id);
-  
-  await updateGuildConfig(interaction.guild.id, {
-    protection: {
-      ...config.protection,
-      enabled: true
-    }
-  });
-
-  await interaction.reply({ 
-    content: "✅ **Sistema de protección ACTIVADO**\n\n💡 Configura cada módulo con `/proteccion anti-nuke`, `/proteccion anti-links`, etc.", 
-    ephemeral: true 
-  });
-}
-
-async function disableProtection(interaction) {
-  const config = await loadGuildConfig(interaction.guild.id);
-  
-  await updateGuildConfig(interaction.guild.id, {
-    protection: {
-      ...config.protection,
-      enabled: false
-    }
-  });
-
-  await interaction.reply({ 
-    content: "❌ **Sistema de protección DESACTIVADO**\n\n⚠️ Tu servidor está desprotegido.", 
-    ephemeral: true 
-  });
-}
-
-async function configureAntiNuke(interaction, config) {
-  const maxRoleCreate = interaction.options.getInteger("max_roles_crear");
-  const maxRoleDelete = interaction.options.getInteger("max_roles_borrar");
-  const maxChannelCreate = interaction.options.getInteger("max_canales_crear");
-  const maxChannelDelete = interaction.options.getInteger("max_canales_borrar");
-  const maxBan = interaction.options.getInteger("max_bans");
-  const maxKick = interaction.options.getInteger("max_kicks");
-  const action = interaction.options.getString("accion");
-
-  const currentAntiNuke = config.protection?.antiNuke || DEFAULT_PROTECTION.antiNuke;
-
-  await updateGuildConfig(interaction.guild.id, {
-    protection: {
-      ...config.protection,
-      antiNuke: {
-        ...currentAntiNuke,
-        enabled: true,
-        maxRoleCreate: maxRoleCreate ?? currentAntiNuke.maxRoleCreate,
-        maxRoleDelete: maxRoleDelete ?? currentAntiNuke.maxRoleDelete,
-        maxChannelCreate: maxChannelCreate ?? currentAntiNuke.maxChannelCreate,
-        maxChannelDelete: maxChannelDelete ?? currentAntiNuke.maxChannelDelete,
-        maxBan: maxBan ?? currentAntiNuke.maxBan,
-        maxKick: maxKick ?? currentAntiNuke.maxKick,
-        action: action ?? currentAntiNuke.action
-      }
-    }
-  });
-
-  await interaction.reply({ 
-    content: `✅ **Anti-Nuke configurado**\n\n🚨 Límites por minuto:\n• Roles crear: **${maxRoleCreate ?? currentAntiNuke.maxRoleCreate}**\n• Roles borrar: **${maxRoleDelete ?? currentAntiNuke.maxRoleDelete}**\n• Canales crear: **${maxChannelCreate ?? currentAntiNuke.maxChannelCreate}**\n• Canales borrar: **${maxChannelDelete ?? currentAntiNuke.maxChannelDelete}**\n• Bans: **${maxBan ?? currentAntiNuke.maxBan}**\n• Kicks: **${maxKick ?? currentAntiNuke.maxKick}**\n\n⚠️ Acción: **${action ?? currentAntiNuke.action}**`, 
-    ephemeral: true 
-  });
-}
-
-async function configureRaidMode(interaction) {
-  const estado = interaction.options.getString("estado");
-  const duracion = interaction.options.getInteger("duracion") || 10;
-
-  if (estado === "on") {
-    await enableRaidMode(interaction.guild.id, null, duracion * 60000);
-    await interaction.reply({ 
-      content: `🚨 **MODO RAID ACTIVADO**\n\n⏰ Duración: **${duracion} minutos**\n\n🔒 Bloqueados: invitaciones, creación de canales/roles`, 
-      ephemeral: false 
-    });
-  } else {
-    await disableRaidMode(interaction.guild.id);
-    await interaction.reply({ 
-      content: "✅ **Modo raid desactivado**\n\nEl servidor ha vuelto a la normalidad.", 
-      ephemeral: false 
-    });
-  }
-}
-
-async function configureAntiLinks(interaction, config) {
-  const activar = interaction.options.getBoolean("activar");
-  const accion = interaction.options.getString("accion");
-
-  const currentAntiLinks = config.protection?.antiLinks || DEFAULT_PROTECTION.antiLinks;
-
-  await updateGuildConfig(interaction.guild.id, {
-    protection: {
-      ...config.protection,
-      antiLinks: {
-        ...currentAntiLinks,
-        enabled: activar,
-        action: accion ?? currentAntiLinks.action
-      }
-    }
-  });
-
-  await interaction.reply({ 
-    content: activar 
-      ? `✅ **Anti-Links ACTIVADO**\n\n🔗 Links permitidos: discord.gg, youtube.com, twitch.tv\nAcción: **${accion ?? currentAntiLinks.action}**`
-      : "❌ **Anti-Links DESACTIVADO**", 
-    ephemeral: true 
-  });
-}
-
-async function configureAntiMentions(interaction, config) {
-  const activar = interaction.options.getBoolean("activar");
-  const maxMenciones = interaction.options.getInteger("max_menciones");
-  const bloquearEveryone = interaction.options.getBoolean("bloquear_everyone");
-  const accion = interaction.options.getString("accion");
-
-  const currentAntiMentions = config.protection?.antiMentions || DEFAULT_PROTECTION.antiMentions;
-
-  await updateGuildConfig(interaction.guild.id, {
-    protection: {
-      ...config.protection,
-      antiMentions: {
-        ...currentAntiMentions,
-        enabled: activar,
-        maxMentionsUser: maxMenciones ?? currentAntiMentions.maxMentionsUser,
-        blockEveryone: bloquearEveryone ?? currentAntiMentions.blockEveryone,
-        action: accion ?? currentAntiMentions.action
-      }
-    }
-  });
-
-  await interaction.reply({ 
-    content: activar 
-      ? `✅ **Anti-Menciones ACTIVADO**\n\n🔔 Máximo menciones: **${maxMenciones ?? currentAntiMentions.maxMentionsUser}**\n@everyone/@here: ${bloquearEveryone ?? currentAntiMentions.blockEveryone ? "🚫 Bloqueado" : "✅ Permitido"}\nAcción: **${accion ?? currentAntiMentions.action}**`
-      : "❌ **Anti-Menciones DESACTIVADO**", 
-    ephemeral: true 
-  });
-}
-
-async function configureAntiAlts(interaction, config) {
-  const activar = interaction.options.getBoolean("activar");
-  const diasMinimos = interaction.options.getInteger("dias_minimos");
-  const modo = interaction.options.getString("modo");
-
-  const currentAntiAlts = config.protection?.antiAlts || DEFAULT_PROTECTION.antiAlts;
-
-  await updateGuildConfig(interaction.guild.id, {
-    protection: {
-      ...config.protection,
-      antiAlts: {
-        ...currentAntiAlts,
-        enabled: activar,
-        minAccountAgeDays: diasMinimos ?? currentAntiAlts.minAccountAgeDays,
-        mode: modo ?? currentAntiAlts.mode
-      }
-    }
-  });
-
-  await interaction.reply({ 
-    content: activar 
-      ? `✅ **Anti-Alts ACTIVADO**\n\n🚫 Mínimo edad cuenta: **${diasMinimos ?? currentAntiAlts.minAccountAgeDays} días**\nModo: **${modo ?? currentAntiAlts.mode}**`
-      : "❌ **Anti-Alts DESACTIVADO**", 
-    ephemeral: true 
-  });
-}
-
-async function configureQuarantine(interaction, config) {
-  const rol = interaction.options.getRole("rol");
-  const canal = interaction.options.getChannel("canal");
-
-  await updateGuildConfig(interaction.guild.id, {
-    protection: {
-      ...config.protection,
-      quarantine: {
-        roleId: rol.id,
-        channelId: canal?.id || null
-      }
-    }
-  });
-
-  await interaction.reply({ 
-    content: `✅ **Cuarentena configurada**\n\n🔒 Rol: ${rol}\n${canal ? `💬 Canal: ${canal}` : ""}`, 
-    ephemeral: true 
-  });
-}
-
-async function configureAutoPunish(interaction, config) {
-  const activar = interaction.options.getBoolean("activar");
-
-  await updateGuildConfig(interaction.guild.id, {
-    protection: {
-      ...config.protection,
-      autoPunish: {
-        ...config.protection?.autoPunish || DEFAULT_PROTECTION.autoPunish,
-        enabled: activar
-      }
-    }
-  });
-
-  await interaction.reply({ 
-    content: activar 
-      ? `✅ **Auto-Punish ACTIVADO**\n\n⚠️ Umbrales por defecto:\n• 3 warns → Timeout 1h\n• 5 warns → Kick\n• 7 warns → Ban`
-      : "❌ **Auto-Punish DESACTIVADO**", 
-    ephemeral: true 
-  });
-}
