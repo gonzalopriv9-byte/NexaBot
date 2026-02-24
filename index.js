@@ -221,7 +221,6 @@ client.once("ready", () => {
 
 client.on("error", (error) => addLog("error", "Discord error: " + error.message));
 client.on("warn", (info) => addLog("warning", "Discord warning: " + info));
-
 client.on("guildCreate", (guild) => addLog("success", "Bot añadido a: " + guild.name));
 client.on("guildDelete", (guild) => addLog("warning", "Bot removido de: " + guild.name));
 
@@ -255,6 +254,23 @@ client.on("guildAuditLogEntryCreate", async (auditLog, guild) => {
 // ==================== GUILD MEMBER ADD ====================
 client.on("guildMemberAdd", async (member) => {
   try {
+    // ── GLOBAL BAN CHECK ──
+    const { data: globalBan } = await supabase
+      .from("global_bans")
+      .select("reason")
+      .eq("user_id", member.id)
+      .single();
+
+    if (globalBan) {
+      const me = member.guild.members.me;
+      if (me?.permissions.has(PermissionFlagsBits.BanMembers)) {
+        await member.ban({ reason: `[GlobalBan] ${globalBan.reason}` });
+        addLog("warning", "GlobalBan autoban: " + member.user.tag + " en " + member.guild.name);
+      }
+      return;
+    }
+    // ─────────────────────
+
     const entry = getEntry(member.user);
     if (entry) {
       const me = member.guild.members.me;
@@ -854,7 +870,6 @@ console.log("Intentando login...");
 console.log("botEnabled:", botEnabled);
 console.log("TOKEN length:", TOKEN?.length);
 console.log("CLIENT_ID:", CLIENT_ID);
-
 
 // ==================== LOGIN ====================
 if (botEnabled) {
