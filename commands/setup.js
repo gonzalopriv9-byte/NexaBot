@@ -89,11 +89,16 @@ module.exports = {
         .addRoleOption(option => option.setName('verificado').setDescription('Rol de verificado').setRequired(true))),
 
   async execute(interaction) {
+    console.log("🛠️ [SETUP] Comando ejecutado por", interaction.user.tag);
+    
     try {
       const subcommand = interaction.options.getSubcommand();
+      console.log("🛠️ [SETUP] Subcomando:", subcommand);
 
       // ==================== TICKETS ====================
       if (subcommand === 'tickets') {
+        console.log("🛠️ [SETUP] Entrando en subcomando tickets");
+        
         const staff = interaction.options.getRole('staff');
         const valoraciones = interaction.options.getChannel('valoraciones');
         const modo = interaction.options.getString('modo') || 'button';
@@ -103,6 +108,10 @@ module.exports = {
           '**¿Qué es un ticket?**\nUn canal privado con el staff.\n\n' +
           '**¿Cuándo usar?**\n• Reportar problemas\n• Hacer preguntas\n• Solicitar ayuda\n\n' +
           EMOJI.CHECK + ' El staff será notificado.';
+
+        console.log("🛠️ [SETUP] Staff:", staff.id);
+        console.log("🛠️ [SETUP] Valoraciones:", valoraciones.id);
+        console.log("🛠️ [SETUP] Modo:", modo);
 
         // Guardar datos temporalmente
         ticketSetupData.set(interaction.user.id, {
@@ -114,6 +123,8 @@ module.exports = {
           descripcion,
           channelId: interaction.channel.id
         });
+
+        console.log("🛠️ [SETUP] Datos guardados en ticketSetupData para", interaction.user.id);
 
         // Mostrar modal para configurar preguntas
         const modal = new ModalBuilder()
@@ -163,7 +174,16 @@ module.exports = {
           )
         );
 
-        await interaction.showModal(modal);
+        console.log("🛠️ [SETUP] Modal creado, mostrando...");
+        
+        try {
+          await interaction.showModal(modal);
+          console.log("✅ [SETUP] Modal mostrado correctamente a", interaction.user.tag);
+        } catch (modalError) {
+          console.error("❌ [SETUP] Error mostrando modal:", modalError);
+          throw modalError;
+        }
+        
         return;
       }
 
@@ -354,7 +374,9 @@ module.exports = {
       }
 
     } catch (error) {
-      console.error('Error en /setup:', error);
+      console.error('❌ [SETUP] Error en /setup:', error);
+      console.error('❌ [SETUP] Stack:', error.stack);
+      
       if (!interaction.replied && !interaction.deferred) {
         return interaction.reply({ content: EMOJI.CRUZ + ' Error: ' + error.message, flags: 64 }).catch(() => {});
       } else {
@@ -365,18 +387,27 @@ module.exports = {
 
   // Handler para el modal de preguntas
   async handleModal(interaction) {
-    if (interaction.customId !== 'setup_tickets_questions') return false;
+    console.log("🛠️ [SETUP MODAL] handleModal llamado por", interaction.user.tag);
+    
+    if (interaction.customId !== 'setup_tickets_questions') {
+      console.log("⚠️ [SETUP MODAL] customId no coincide:", interaction.customId);
+      return false;
+    }
 
     await interaction.deferReply({ flags: 64 });
 
     try {
       const setupData = ticketSetupData.get(interaction.user.id);
       if (!setupData) {
+        console.error("❌ [SETUP MODAL] setupData no encontrado para", interaction.user.id);
         return interaction.editReply({ content: EMOJI.CRUZ + ' Sesión expirada. Ejecuta `/setup tickets` de nuevo.' });
       }
 
+      console.log("🛠️ [SETUP MODAL] setupData encontrado:", setupData);
+
       const guild = interaction.client.guilds.cache.get(setupData.guildId);
       if (!guild) {
+        console.error("❌ [SETUP MODAL] Guild no encontrado:", setupData.guildId);
         return interaction.editReply({ content: EMOJI.CRUZ + ' Servidor no encontrado.' });
       }
 
@@ -411,11 +442,14 @@ module.exports = {
         });
       }
 
+      console.log("🛠️ [SETUP MODAL] Preguntas recopiladas:", questions);
+
       // Crear categoría de Discord si no existe
       let categoria = guild.channels.cache.find(
         c => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('ticket')
       );
       if (!categoria) {
+        console.log("🛠️ [SETUP MODAL] Creando categoría de tickets...");
         categoria = await guild.channels.create({
           name: '📂 TICKETS',
           type: ChannelType.GuildCategory,
@@ -426,8 +460,10 @@ module.exports = {
         });
       }
 
+      console.log("🛠️ [SETUP MODAL] Categoría:", categoria.name, categoria.id);
+
       // Guardar configuración en Supabase
-      await updateGuildConfig(setupData.guildId, {
+      const configToSave = {
         tickets: {
           enabled: true,
           categoryId: categoria.id,
@@ -439,7 +475,11 @@ module.exports = {
           categories: [],
           defaultQuestions: questions
         }
-      });
+      };
+
+      console.log("🛠️ [SETUP MODAL] Guardando config:", JSON.stringify(configToSave));
+      await updateGuildConfig(setupData.guildId, configToSave);
+      console.log("✅ [SETUP MODAL] Config guardada en Supabase");
 
       // Crear panel en el canal original
       const channel = guild.channels.cache.get(setupData.channelId);
@@ -461,6 +501,8 @@ module.exports = {
         .setDescription(setupData.descripcion)
         .setFooter({ text: 'Sistema de soporte' }).setTimestamp();
 
+      console.log("🛠️ [SETUP MODAL] Creando panel en canal", channel.name);
+
       let panelMessage;
       if (setupData.modo === 'button') {
         panelMessage = await channel.send({
@@ -481,6 +523,8 @@ module.exports = {
         });
       }
 
+      console.log("✅ [SETUP MODAL] Panel creado:", panelMessage.url);
+
       // Limpiar datos temporales
       ticketSetupData.delete(interaction.user.id);
 
@@ -498,7 +542,8 @@ module.exports = {
       });
 
     } catch (error) {
-      console.error('Error en modal setup_tickets_questions:', error);
+      console.error('❌ [SETUP MODAL] Error en handleModal:', error);
+      console.error('❌ [SETUP MODAL] Stack:', error.stack);
       ticketSetupData.delete(interaction.user.id);
       return interaction.editReply({ content: EMOJI.CRUZ + ' Error: ' + error.message });
     }
