@@ -452,11 +452,26 @@ client.on("interactionCreate", async (interaction) => {
 
     // MODAL: SETUP TICKETS QUESTIONS
     if (interaction.isModalSubmit() && interaction.customId === 'setup_tickets_questions') {
+      addLog("info", "Modal setup_tickets_questions recibido de " + interaction.user.tag);
       const setupCommand = client.commands.get('setup');
-      if (setupCommand?.handleModal) {
-        await setupCommand.handleModal(interaction);
-        return;
+      if (!setupCommand) {
+        addLog("error", "Comando 'setup' no encontrado en colección");
+        return interaction.reply({ content: EMOJI.CRUZ + " Error: comando setup no cargado.", flags: 64 }).catch(() => {});
       }
+      if (!setupCommand.handleModal) {
+        addLog("error", "Método handleModal no existe en comando setup");
+        return interaction.reply({ content: EMOJI.CRUZ + " Error: función handleModal no encontrada.", flags: 64 }).catch(() => {});
+      }
+      try {
+        await setupCommand.handleModal(interaction);
+        addLog("success", "Modal setup_tickets_questions procesado correctamente");
+      } catch (err) {
+        addLog("error", "Error en handleModal: " + err.message + " | Stack: " + err.stack);
+        if (!interaction.replied && !interaction.deferred) {
+          interaction.reply({ content: EMOJI.CRUZ + " Error: " + err.message, flags: 64 }).catch(() => {});
+        }
+      }
+      return;
     }
 
     // SELECT MENU: ELEGIR CATEGORIA DE TICKET
