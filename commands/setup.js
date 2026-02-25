@@ -6,9 +6,12 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  StringSelectMenuBuilder
+  StringSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle
 } = require('discord.js');
-const { updateGuildConfig } = require('../utils/configManager');
+const { updateGuildConfig, loadGuildConfig } = require('../utils/configManager');
 
 const EMOJI = {
   CHECK: "<a:Check:1472540340584972509>",
@@ -16,6 +19,9 @@ const EMOJI = {
   TICKET: "<a:Ticket:1472541437470965942>",
   MEGAFONO: "<a:Megafono:1472541640970211523>"
 };
+
+// Almacenamiento temporal para configuración de tickets
+const ticketSetupData = new Map();
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -85,8 +91,6 @@ module.exports = {
   async execute(interaction) {
     try {
       const subcommand = interaction.options.getSubcommand();
-      await interaction.deferReply({ flags: 64 });
-      const guild = interaction.guild;
 
       // ==================== TICKETS ====================
       if (subcommand === 'tickets') {
@@ -100,63 +104,71 @@ module.exports = {
           '**¿Cuándo usar?**\n• Reportar problemas\n• Hacer preguntas\n• Solicitar ayuda\n\n' +
           EMOJI.CHECK + ' El staff será notificado.';
 
-        let categoria = guild.channels.cache.find(
-          c => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('ticket')
+        // Guardar datos temporalmente
+        ticketSetupData.set(interaction.user.id, {
+          guildId: interaction.guild.id,
+          staff: staff.id,
+          valoraciones: valoraciones.id,
+          modo,
+          titulo,
+          descripcion,
+          channelId: interaction.channel.id
+        });
+
+        // Mostrar modal para configurar preguntas
+        const modal = new ModalBuilder()
+          .setCustomId('setup_tickets_questions')
+          .setTitle('Preguntas del Ticket');
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('question_1_label')
+              .setLabel('Pregunta 1 (obligatoria)')
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder('Ej: Usuario de Roblox')
+              .setRequired(true)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('question_1_placeholder')
+              .setLabel('Texto de ayuda para pregunta 1')
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder('Ej: Escribe tu usuario de Roblox')
+              .setRequired(false)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('question_2_label')
+              .setLabel('Pregunta 2 (obligatoria)')
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder('Ej: Motivo del ticket')
+              .setRequired(true)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('question_2_placeholder')
+              .setLabel('Texto de ayuda para pregunta 2')
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder('Ej: Describe tu problema')
+              .setRequired(false)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('question_3_label')
+              .setLabel('Pregunta 3 (opcional)')
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder('Deja vacío si no quieres más preguntas')
+              .setRequired(false)
+          )
         );
-        if (!categoria) {
-          categoria = await guild.channels.create({
-            name: '📂 TICKETS',
-            type: ChannelType.GuildCategory,
-            permissionOverwrites: [
-              { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-              { id: staff.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels] }
-            ]
-          });
-        }
 
-        await updateGuildConfig(guild.id, {
-          tickets: {
-            enabled: true,
-            categoryId: categoria.id,
-            staffRoles: [staff.id],
-            ratingsChannelId: valoraciones.id,
-            mode: modo,
-            panelTitle: titulo,
-            panelDescription: descripcion,
-            categories: [] // Se llenarán con /addticket
-          }
-        });
-
-        const embed = new EmbedBuilder()
-          .setColor('#00BFFF')
-          .setTitle(titulo)
-          .setDescription(descripcion)
-          .setFooter({ text: 'Sistema de soporte' }).setTimestamp();
-
-        if (modo === 'button') {
-          await interaction.channel.send({
-            embeds: [embed],
-            components: [new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId('open_ticket').setLabel('Abrir Ticket').setStyle(ButtonStyle.Primary)
-            )]
-          });
-        } else {
-          // Modo select: por ahora sin opciones, se añadirán con /addticket
-          await interaction.channel.send({
-            embeds: [embed],
-            components: [new ActionRowBuilder().addComponents(
-              new StringSelectMenuBuilder()
-                .setCustomId('open_ticket_select')
-                .setPlaceholder('Selecciona el tipo de ticket')
-                .addOptions({ label: 'General', value: 'general', description: 'Ticket general' })
-            )]
-          });
-        }
-
-        return interaction.editReply({
-          content: EMOJI.CHECK + ' **Tickets configurado:**\n\nCategoría: <#' + categoria.id + '>\nStaff: <@&' + staff.id + '>\nValoraciones: <#' + valoraciones.id + '>\nModo: ' + (modo === 'button' ? 'Botón Simple' : 'Menú Desplegable') + '\n\n**Panel creado arriba**\nUsa `/addticket` para añadir categorías personalizadas.'
-        });
+        await interaction.showModal(modal);
+        return;
       }
+
+      await interaction.deferReply({ flags: 64 });
+      const guild = interaction.guild;
 
       // ==================== BIENVENIDA ====================
       if (subcommand === 'bienvenida') {
@@ -308,7 +320,11 @@ module.exports = {
               staffRoles: [rolStaff.id],
               ratingsChannelId: canalValoraciones.id,
               mode: 'button',
-              categories: []
+              categories: [],
+              defaultQuestions: [
+                { id: 'field_1', label: 'Usuario de Roblox', placeholder: 'Tu usuario de Roblox', required: true },
+                { id: 'field_2', label: 'Motivo del ticket', placeholder: 'Describe tu problema', required: true }
+              ]
             }
           });
           exitos.push('🎫 Tickets → <#' + categoria.id + '>');
@@ -339,7 +355,143 @@ module.exports = {
 
     } catch (error) {
       console.error('Error en /setup:', error);
-      return interaction.editReply({ content: EMOJI.CRUZ + ' Error: ' + error.message }).catch(() => {});
+      if (!interaction.replied && !interaction.deferred) {
+        return interaction.reply({ content: EMOJI.CRUZ + ' Error: ' + error.message, flags: 64 }).catch(() => {});
+      } else {
+        return interaction.editReply({ content: EMOJI.CRUZ + ' Error: ' + error.message }).catch(() => {});
+      }
+    }
+  },
+
+  // Handler para el modal de preguntas
+  async handleModal(interaction) {
+    if (interaction.customId !== 'setup_tickets_questions') return false;
+
+    await interaction.deferReply({ flags: 64 });
+
+    try {
+      const setupData = ticketSetupData.get(interaction.user.id);
+      if (!setupData) {
+        return interaction.editReply({ content: EMOJI.CRUZ + ' Sesión expirada. Ejecuta `/setup tickets` de nuevo.' });
+      }
+
+      const guild = interaction.client.guilds.cache.get(setupData.guildId);
+      if (!guild) {
+        return interaction.editReply({ content: EMOJI.CRUZ + ' Servidor no encontrado.' });
+      }
+
+      // Recoger preguntas del modal
+      const questions = [];
+      
+      const q1Label = interaction.fields.getTextInputValue('question_1_label');
+      const q1Placeholder = interaction.fields.getTextInputValue('question_1_placeholder') || 'Escribe tu respuesta...';
+      questions.push({
+        id: 'field_1',
+        label: q1Label,
+        placeholder: q1Placeholder,
+        required: true
+      });
+
+      const q2Label = interaction.fields.getTextInputValue('question_2_label');
+      const q2Placeholder = interaction.fields.getTextInputValue('question_2_placeholder') || 'Escribe tu respuesta...';
+      questions.push({
+        id: 'field_2',
+        label: q2Label,
+        placeholder: q2Placeholder,
+        required: true
+      });
+
+      const q3Label = interaction.fields.getTextInputValue('question_3_label');
+      if (q3Label && q3Label.trim()) {
+        questions.push({
+          id: 'field_3',
+          label: q3Label,
+          placeholder: 'Escribe tu respuesta...',
+          required: false
+        });
+      }
+
+      // Crear categoría de Discord si no existe
+      let categoria = guild.channels.cache.find(
+        c => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('ticket')
+      );
+      if (!categoria) {
+        categoria = await guild.channels.create({
+          name: '📂 TICKETS',
+          type: ChannelType.GuildCategory,
+          permissionOverwrites: [
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+            { id: setupData.staff, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ManageChannels] }
+          ]
+        });
+      }
+
+      // Guardar configuración en Supabase
+      await updateGuildConfig(setupData.guildId, {
+        tickets: {
+          enabled: true,
+          categoryId: categoria.id,
+          staffRoles: [setupData.staff],
+          ratingsChannelId: setupData.valoraciones,
+          mode: setupData.modo,
+          panelTitle: setupData.titulo,
+          panelDescription: setupData.descripcion,
+          categories: [],
+          defaultQuestions: questions
+        }
+      });
+
+      // Crear panel en el canal original
+      const channel = guild.channels.cache.get(setupData.channelId);
+      if (!channel) {
+        return interaction.editReply({ content: EMOJI.CRUZ + ' Canal no encontrado.' });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor('#00BFFF')
+        .setTitle(setupData.titulo)
+        .setDescription(setupData.descripcion)
+        .setFooter({ text: 'Sistema de soporte' }).setTimestamp();
+
+      if (setupData.modo === 'button') {
+        await channel.send({
+          embeds: [embed],
+          components: [new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('open_ticket').setLabel('🎫 Abrir Ticket').setStyle(ButtonStyle.Primary)
+          )]
+        });
+      } else {
+        await channel.send({
+          embeds: [embed],
+          components: [new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('open_ticket_select')
+              .setPlaceholder('Selecciona el tipo de ticket')
+              .addOptions({ label: 'General', value: 'general', description: 'Ticket general', emoji: '🎫' })
+          )]
+        });
+      }
+
+      // Limpiar datos temporales
+      ticketSetupData.delete(interaction.user.id);
+
+      const questionsList = questions.map((q, i) => `${i + 1}. **${q.label}** ${q.required ? '(obligatoria)' : '(opcional)'}`).join('\n');
+
+      return interaction.editReply({
+        content: EMOJI.CHECK + ' **Tickets configurado:**\n\n' +
+          'Categoría: <#' + categoria.id + '>\n' +
+          'Staff: <@&' + setupData.staff + '>\n' +
+          'Valoraciones: <#' + setupData.valoraciones + '>\n' +
+          'Modo: ' + (setupData.modo === 'button' ? 'Botón Simple' : 'Menú Desplegable') + '\n\n' +
+          '**Preguntas configuradas:**\n' + questionsList + '\n\n' +
+          '**Panel creado en** <#' + setupData.channelId + '>\n' +
+          'Usa `/addticket` para añadir más categorías.'
+      });
+
+    } catch (error) {
+      console.error('Error en modal setup_tickets_questions:', error);
+      ticketSetupData.delete(interaction.user.id);
+      return interaction.editReply({ content: EMOJI.CRUZ + ' Error: ' + error.message });
     }
   }
 };
