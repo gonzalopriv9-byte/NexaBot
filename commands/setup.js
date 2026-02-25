@@ -5,7 +5,8 @@ const {
   ChannelType,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  StringSelectMenuBuilder
 } = require('discord.js');
 const { updateGuildConfig } = require('../utils/configManager');
 
@@ -30,7 +31,17 @@ module.exports = {
           option.setName('staff').setDescription('Rol del staff').setRequired(true))
         .addChannelOption(option =>
           option.setName('valoraciones').setDescription('Canal de valoraciones')
-            .addChannelTypes(ChannelType.GuildText).setRequired(true)))
+            .addChannelTypes(ChannelType.GuildText).setRequired(true))
+        .addStringOption(option =>
+          option.setName('modo').setDescription('Tipo de panel')
+            .addChoices(
+              { name: 'Boton Simple', value: 'button' },
+              { name: 'Menu Desplegable', value: 'select' }
+            ).setRequired(false))
+        .addStringOption(option =>
+          option.setName('titulo').setDescription('Titulo del embed del panel').setRequired(false))
+        .addStringOption(option =>
+          option.setName('descripcion').setDescription('Descripcion del embed del panel').setRequired(false)))
 
     .addSubcommand(subcommand =>
       subcommand
@@ -81,13 +92,20 @@ module.exports = {
       if (subcommand === 'tickets') {
         const staff = interaction.options.getRole('staff');
         const valoraciones = interaction.options.getChannel('valoraciones');
+        const modo = interaction.options.getString('modo') || 'button';
+        const titulo = interaction.options.getString('titulo') || EMOJI.TICKET + ' Sistema de Tickets';
+        const descripcion = interaction.options.getString('descripcion') || 
+          '¿Necesitas ayuda? Haz clic en el botón para abrir un ticket.\n\n' +
+          '**¿Qué es un ticket?**\nUn canal privado con el staff.\n\n' +
+          '**¿Cuándo usar?**\n• Reportar problemas\n• Hacer preguntas\n• Solicitar ayuda\n\n' +
+          EMOJI.CHECK + ' El staff será notificado.';
 
         let categoria = guild.channels.cache.find(
           c => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('ticket')
         );
         if (!categoria) {
           categoria = await guild.channels.create({
-            name: 'TICKETS',
+            name: '📂 TICKETS',
             type: ChannelType.GuildCategory,
             permissionOverwrites: [
               { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
@@ -101,30 +119,42 @@ module.exports = {
             enabled: true,
             categoryId: categoria.id,
             staffRoles: [staff.id],
-            ratingsChannelId: valoraciones.id
+            ratingsChannelId: valoraciones.id,
+            mode: modo,
+            panelTitle: titulo,
+            panelDescription: descripcion,
+            categories: [] // Se llenarán con /addticket
           }
         });
 
         const embed = new EmbedBuilder()
           .setColor('#00BFFF')
-          .setTitle(EMOJI.TICKET + ' Sistema de Tickets')
-          .setDescription(
-            'Necesitas ayuda? Haz clic en el boton para abrir un ticket.\n\n' +
-            '**Que es un ticket?**\nUn canal privado con el staff.\n\n' +
-            '**Cuando usar?**\n• Reportar problemas\n• Hacer preguntas\n• Solicitar ayuda\n\n' +
-            EMOJI.CHECK + ' El staff sera notificado.'
-          )
+          .setTitle(titulo)
+          .setDescription(descripcion)
           .setFooter({ text: 'Sistema de soporte' }).setTimestamp();
 
-        await interaction.channel.send({
-          embeds: [embed],
-          components: [new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('open_ticket').setLabel('Abrir Ticket').setStyle(ButtonStyle.Primary)
-          )]
-        });
+        if (modo === 'button') {
+          await interaction.channel.send({
+            embeds: [embed],
+            components: [new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId('open_ticket').setLabel('Abrir Ticket').setStyle(ButtonStyle.Primary)
+            )]
+          });
+        } else {
+          // Modo select: por ahora sin opciones, se añadirán con /addticket
+          await interaction.channel.send({
+            embeds: [embed],
+            components: [new ActionRowBuilder().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('open_ticket_select')
+                .setPlaceholder('Selecciona el tipo de ticket')
+                .addOptions({ label: 'General', value: 'general', description: 'Ticket general' })
+            )]
+          });
+        }
 
         return interaction.editReply({
-          content: EMOJI.CHECK + ' **Tickets configurado:**\n\nCategoria: ' + categoria + '\nStaff: ' + staff + '\nValoraciones: ' + valoraciones + '\n\nPanel creado arriba'
+          content: EMOJI.CHECK + ' **Tickets configurado:**\n\nCategoría: <#' + categoria.id + '>\nStaff: <@&' + staff.id + '>\nValoraciones: <#' + valoraciones.id + '>\nModo: ' + (modo === 'button' ? 'Botón Simple' : 'Menú Desplegable') + '\n\n**Panel creado arriba**\nUsa `/addticket` para añadir categorías personalizadas.'
         });
       }
 
@@ -143,7 +173,7 @@ module.exports = {
         });
 
         return interaction.editReply({
-          content: EMOJI.CHECK + ' **Bienvenidas configuradas:**\n\nCanal: ' + canal + '\nImagen: ' + imagen.substring(0, 50) + '...'
+          content: EMOJI.CHECK + ' **Bienvenidas configuradas:**\n\nCanal: <#' + canal.id + '>\nImagen: ' + imagen.substring(0, 50) + '...'
         });
       }
 
@@ -160,9 +190,9 @@ module.exports = {
 
         const embed = new EmbedBuilder()
           .setColor('#5865F2')
-          .setTitle('Verificacion')
-          .setDescription('**Verifica tu cuenta para acceder al servidor.**\n\nClick en el boton para verificarte por email.')
-          .setFooter({ text: 'Sistema de verificacion' }).setTimestamp();
+          .setTitle('✅ Verificación')
+          .setDescription('**Verifica tu cuenta para acceder al servidor.**\n\nClick en el botón para verificarte por email.')
+          .setFooter({ text: 'Sistema de verificación' }).setTimestamp();
 
         await interaction.channel.send({
           embeds: [embed],
@@ -172,7 +202,7 @@ module.exports = {
         });
 
         return interaction.editReply({
-          content: EMOJI.CHECK + ' **Verificacion configurada:**\n\nRol: ' + rol + '\n\nPanel creado arriba'
+          content: EMOJI.CHECK + ' **Verificación configurada:**\n\nRol: <@&' + rol.id + '>\n\n**Panel creado arriba**'
         });
       }
 
@@ -211,8 +241,8 @@ module.exports = {
           .join('\n');
 
         const embed = new EmbedBuilder()
-          .setColor('#00BFFF').setTitle('CENTRO DE EMPLEO')
-          .setDescription('Selecciona tu trabajo:\n\n**Personal actual:**\n' + trabajosList + '\n\nSolo puedes tener un trabajo a la vez.')
+          .setColor('#00BFFF').setTitle('💼 CENTRO DE EMPLEO')
+          .setDescription('Selecciona tu trabajo:\n\n**Personal actual:**\n' + trabajosList + '\n\n• Solo puedes tener un trabajo a la vez.')
           .setFooter({ text: 'Sistema de empleos' }).setTimestamp();
 
         const rows = [];
@@ -226,13 +256,13 @@ module.exports = {
           rows.push(row);
         }
         rows.push(new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('trabajo_quitar').setLabel('Renunciar').setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId('trabajo_quitar').setLabel('❌ Renunciar').setStyle(ButtonStyle.Danger)
         ));
 
         await interaction.channel.send({ embeds: [embed], components: rows });
 
         return interaction.editReply({
-          content: EMOJI.CHECK + ' **Trabajos configurados:**\n\n' + trabajosList + '\n\nPanel creado arriba'
+          content: EMOJI.CHECK + ' **Trabajos configurados:**\n\n' + trabajosList + '\n\n**Panel creado arriba**'
         });
       }
 
@@ -254,7 +284,7 @@ module.exports = {
               imageUrl: 'https://raw.githubusercontent.com/gonzalopriv9-byte/EspanoletesBOT.1/main/assets/ChatGPT_Image_13_feb_2026_19_27_59.webp'
             }
           });
-          exitos.push('👋 Bienvenidas → ' + canalBienvenidas);
+          exitos.push('👋 Bienvenidas → <#' + canalBienvenidas.id + '>');
         } catch (e) { errores.push('Bienvenidas: ' + e.message); }
 
         try {
@@ -263,7 +293,7 @@ module.exports = {
           );
           if (!categoria) {
             categoria = await guild.channels.create({
-              name: 'TICKETS',
+              name: '📂 TICKETS',
               type: ChannelType.GuildCategory,
               permissionOverwrites: [
                 { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
@@ -276,10 +306,12 @@ module.exports = {
               enabled: true,
               categoryId: categoria.id,
               staffRoles: [rolStaff.id],
-              ratingsChannelId: canalValoraciones.id
+              ratingsChannelId: canalValoraciones.id,
+              mode: 'button',
+              categories: []
             }
           });
-          exitos.push('🎫 Tickets → ' + categoria);
+          exitos.push('🎫 Tickets → <#' + categoria.id + '>');
         } catch (e) { errores.push('Tickets: ' + e.message); }
 
         try {
@@ -289,16 +321,16 @@ module.exports = {
               roleId: rolVerificado.id
             }
           });
-          exitos.push('✅ Verificacion → ' + rolVerificado);
-        } catch (e) { errores.push('Verificacion: ' + e.message); }
+          exitos.push('✅ Verificación → <@&' + rolVerificado.id + '>');
+        } catch (e) { errores.push('Verificación: ' + e.message); }
 
         const resultEmbed = new EmbedBuilder()
           .setColor(errores.length > 0 ? '#FFA500' : '#00FF00')
-          .setTitle(EMOJI.CHECK + ' Configuracion Completa')
+          .setTitle(EMOJI.CHECK + ' Configuración Completa')
           .setDescription(
             '**Sistemas configurados:**\n' + exitos.join('\n') +
             (errores.length > 0 ? '\n\n**Errores:**\n' + errores.join('\n') : '') +
-            '\n\n**Siguiente paso:**\n• `/setup tickets` - Panel de tickets\n• `/setup verificacion` - Panel de verificacion'
+            '\n\n**Siguiente paso:**\n• `/setup tickets` - Panel de tickets\n• `/setup verificacion` - Panel de verificación'
           )
           .setFooter({ text: 'Configurado por ' + interaction.user.tag }).setTimestamp();
 
