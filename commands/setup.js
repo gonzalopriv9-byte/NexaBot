@@ -444,7 +444,15 @@ module.exports = {
       // Crear panel en el canal original
       const channel = guild.channels.cache.get(setupData.channelId);
       if (!channel) {
-        return interaction.editReply({ content: EMOJI.CRUZ + ' Canal no encontrado.' });
+        ticketSetupData.delete(interaction.user.id);
+        return interaction.editReply({ 
+          content: EMOJI.CHECK + ' **Tickets configurado correctamente**\n\n' +
+            'Categoría: <#' + categoria.id + '>\n' +
+            'Staff: <@&' + setupData.staff + '>\n' +
+            'Valoraciones: <#' + setupData.valoraciones + '>\n\n' +
+            '⚠️ No se pudo crear el panel en el canal original.\n' +
+            'Usa este comando en el canal donde quieras el panel: `/setup tickets` de nuevo.' 
+        });
       }
 
       const embed = new EmbedBuilder()
@@ -453,15 +461,16 @@ module.exports = {
         .setDescription(setupData.descripcion)
         .setFooter({ text: 'Sistema de soporte' }).setTimestamp();
 
+      let panelMessage;
       if (setupData.modo === 'button') {
-        await channel.send({
+        panelMessage = await channel.send({
           embeds: [embed],
           components: [new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('open_ticket').setLabel('🎫 Abrir Ticket').setStyle(ButtonStyle.Primary)
           )]
         });
       } else {
-        await channel.send({
+        panelMessage = await channel.send({
           embeds: [embed],
           components: [new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
@@ -484,7 +493,7 @@ module.exports = {
           'Valoraciones: <#' + setupData.valoraciones + '>\n' +
           'Modo: ' + (setupData.modo === 'button' ? 'Botón Simple' : 'Menú Desplegable') + '\n\n' +
           '**Preguntas configuradas:**\n' + questionsList + '\n\n' +
-          '**Panel creado en** <#' + setupData.channelId + '>\n' +
+          '**Panel creado:** ' + panelMessage.url + '\n' +
           'Usa `/addticket` para añadir más categorías.'
       });
 
