@@ -450,6 +450,15 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
+    // MODAL: SETUP TICKETS QUESTIONS
+    if (interaction.isModalSubmit() && interaction.customId === 'setup_tickets_questions') {
+      const setupCommand = client.commands.get('setup');
+      if (setupCommand?.handleModal) {
+        await setupCommand.handleModal(interaction);
+        return;
+      }
+    }
+
     // SELECT MENU: ELEGIR CATEGORIA DE TICKET
     if (interaction.isStringSelectMenu() && interaction.customId === "open_ticket_select") {
       const categoryId = interaction.values[0];
@@ -495,17 +504,33 @@ client.on("interactionCreate", async (interaction) => {
 
     // BOTON: ABRIR TICKET (MODO SIMPLE)
     if (interaction.isButton() && interaction.customId === "open_ticket") {
+      const guildConfig = await loadGuildConfig(interaction.guild.id);
+      
+      if (!guildConfig?.tickets?.enabled) {
+        return interaction.reply({ content: EMOJI.CRUZ + " Sistema de tickets no configurado.", flags: 64 });
+      }
+
+      // Usar preguntas por defecto de la config o las clásicas
+      const questions = guildConfig.tickets.defaultQuestions || [
+        { id: 'field_1', label: 'Usuario de Roblox', placeholder: 'Tu usuario de Roblox', required: true },
+        { id: 'field_2', label: 'Motivo del ticket', placeholder: 'Describe tu problema', required: true }
+      ];
+
       const modal = new ModalBuilder().setCustomId("ticket_modal_general").setTitle("Crear Ticket");
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId("field_1").setLabel("Usuario de Roblox")
-            .setStyle(TextInputStyle.Short).setPlaceholder("Tu usuario de Roblox").setRequired(true)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId("field_2").setLabel("Motivo del ticket")
-            .setStyle(TextInputStyle.Paragraph).setPlaceholder("Describe tu problema").setRequired(true)
-        )
-      );
+      
+      for (const q of questions.slice(0, 5)) {
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId(q.id)
+              .setLabel(q.label)
+              .setStyle(q.label.length > 30 ? TextInputStyle.Paragraph : TextInputStyle.Short)
+              .setPlaceholder(q.placeholder || "Escribe tu respuesta...")
+              .setRequired(q.required !== false)
+          )
+        );
+      }
+
       await interaction.showModal(modal);
       return;
     }
@@ -541,8 +566,18 @@ client.on("interactionCreate", async (interaction) => {
             }
           }
         } else {
-          ticketData["Usuario Roblox"] = interaction.fields.getTextInputValue("field_1");
-          ticketData["Motivo"] = interaction.fields.getTextInputValue("field_2");
+          // Usar preguntas configuradas
+          const questions = guildConfig.tickets.defaultQuestions || [
+            { id: 'field_1', label: 'Usuario de Roblox' },
+            { id: 'field_2', label: 'Motivo del ticket' }
+          ];
+          
+          for (const q of questions) {
+            try {
+              const valor = interaction.fields.getTextInputValue(q.id);
+              ticketData[q.label] = valor;
+            } catch { /* campo no encontrado */ }
+          }
         }
 
         const ticketChannel = await guild.channels.create({
