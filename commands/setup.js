@@ -86,7 +86,8 @@ module.exports = {
           option.setName('valoraciones').setDescription('Canal de valoraciones de tickets')
             .addChannelTypes(ChannelType.GuildText).setRequired(true))
         .addRoleOption(option => option.setName('staff').setDescription('Rol del staff').setRequired(true))
-        .addRoleOption(option => option.setName('verificado').setDescription('Rol de verificado').setRequired(true))),
+        .addRoleOption(option => option.setName('verificado').setDescription('Rol de verificado').setRequired(true))
+        .addRoleOption(option => option.setName('anunciar').setDescription('Rol que puede usar /anunciar (opcional)').setRequired(false))),
 
   async execute(interaction) {
     console.log("🛠️ [SETUP] Comando ejecutado por", interaction.user.tag);
@@ -304,6 +305,7 @@ module.exports = {
         const canalValoraciones = interaction.options.getChannel('valoraciones');
         const rolStaff = interaction.options.getRole('staff');
         const rolVerificado = interaction.options.getRole('verificado');
+        const rolAnunciar = interaction.options.getRole('anunciar');
 
         const errores = [];
         const exitos = [];
@@ -359,6 +361,19 @@ module.exports = {
           });
           exitos.push('✅ Verificación → <@&' + rolVerificado.id + '>');
         } catch (e) { errores.push('Verificación: ' + e.message); }
+
+        // Configurar rol de anunciar si se especificó
+        if (rolAnunciar) {
+          try {
+            await updateGuildConfig(guild.id, {
+              anunciar: {
+                enabled: true,
+                roleId: rolAnunciar.id
+              }
+            });
+            exitos.push('📢 Anunciar → <@&' + rolAnunciar.id + '>');
+          } catch (e) { errores.push('Anunciar: ' + e.message); }
+        }
 
         const resultEmbed = new EmbedBuilder()
           .setColor(errores.length > 0 ? '#FFA500' : '#00FF00')
