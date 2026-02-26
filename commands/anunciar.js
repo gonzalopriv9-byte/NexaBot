@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { loadGuildConfig } = require('../utils/configManager');
 
 // ==================== EMOJIS ANIMADOS ====================
 const EMOJI = {
@@ -51,16 +52,20 @@ module.exports = {
     });
 
     try {
-      // Verificar roles permitidos
-      const allowedRoles = ["1469344936620195872"];
-      const hasPermission = allowedRoles.some(roleId => 
-        interaction.member.roles.cache.has(roleId)
-      );
+      // Cargar configuración del servidor
+      const config = await loadGuildConfig(interaction.guild.id);
+      const roleId = config?.anunciar?.roleId;
 
-      if (!hasPermission) {
+      // Verificar permisos: Admin o rol configurado
+      const isAdmin = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+      const hasConfiguredRole = roleId && interaction.member.roles.cache.has(roleId);
+
+      if (!isAdmin && !hasConfiguredRole) {
         processingAnnouncements.delete(uniqueKey);
         return interaction.reply({
-          content: `${EMOJI.CRUZ} No tienes permiso para usar este comando.`,
+          content: `${EMOJI.CRUZ} No tienes permiso para usar este comando.${
+            roleId ? `\nNecesitas el rol <@&${roleId}> o permisos de Administrador.` : '\nSolo administradores pueden usar este comando.'
+          }`,
           flags: 64
         });
       }
