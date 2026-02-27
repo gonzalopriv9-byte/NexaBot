@@ -477,6 +477,12 @@ module.exports = {
 
       console.log("🛠️ [SETUP MODAL] Categoría:", categoria.name, categoria.id);
 
+      // Cargar configuración existente para preservar categorías de /addticket
+      const existingConfig = await loadGuildConfig(setupData.guildId);
+      const existingCategories = existingConfig?.tickets?.categories || [];
+      
+      console.log("🛠️ [SETUP MODAL] Categorías existentes:", existingCategories.length);
+
       // Guardar configuración en Supabase
       const configToSave = {
         tickets: {
@@ -487,7 +493,7 @@ module.exports = {
           mode: setupData.modo,
           panelTitle: setupData.titulo,
           panelDescription: setupData.descripcion,
-          categories: [],
+          categories: existingCategories, // ✅ CONSERVAR CATEGORÍAS EXISTENTES
           defaultQuestions: questions
         }
       };
@@ -527,14 +533,32 @@ module.exports = {
           )]
         });
       } else {
+        // Crear menú con todas las categorías
+        const selectMenu = new StringSelectMenuBuilder()
+          .setCustomId('open_ticket_select')
+          .setPlaceholder('Selecciona el tipo de ticket');
+        
+        // Añadir opción General
+        selectMenu.addOptions({ 
+          label: 'General', 
+          value: 'general', 
+          description: 'Ticket general', 
+          emoji: '🎫' 
+        });
+        
+        // Añadir categorías personalizadas
+        for (const cat of existingCategories) {
+          selectMenu.addOptions({
+            label: cat.nombre,
+            value: cat.id,
+            description: cat.descripcion || 'Sin descripción',
+            emoji: cat.emoji || '🎫'
+          });
+        }
+        
         panelMessage = await channel.send({
           embeds: [embed],
-          components: [new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId('open_ticket_select')
-              .setPlaceholder('Selecciona el tipo de ticket')
-              .addOptions({ label: 'General', value: 'general', description: 'Ticket general', emoji: '🎫' })
-          )]
+          components: [new ActionRowBuilder().addComponents(selectMenu)]
         });
       }
 
@@ -544,6 +568,9 @@ module.exports = {
       ticketSetupData.delete(interaction.user.id);
 
       const questionsList = questions.map((q, i) => `${i + 1}. **${q.label}** ${q.required ? '(obligatoria)' : '(opcional)'}`).join('\n');
+      const categoriesList = existingCategories.length > 0 
+        ? '\n\n**Categorías personalizadas:** ' + existingCategories.length
+        : '';
 
       return interaction.editReply({
         content: EMOJI.CHECK + ' **Tickets configurado:**\n\n' +
@@ -551,7 +578,7 @@ module.exports = {
           'Staff: <@&' + setupData.staff + '>\n' +
           'Valoraciones: <#' + setupData.valoraciones + '>\n' +
           'Modo: ' + (setupData.modo === 'button' ? 'Botón Simple' : 'Menú Desplegable') + '\n\n' +
-          '**Preguntas configuradas:**\n' + questionsList + '\n\n' +
+          '**Preguntas configuradas:**\n' + questionsList + categoriesList + '\n\n' +
           '**Panel creado:** ' + panelMessage.url + '\n' +
           'Usa `/addticket` para añadir más categorías.'
       });
