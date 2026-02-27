@@ -1005,14 +1005,14 @@ client.on("messageCreate", async (message) => {
       }
     }
 
-    // IA
-    if (message.guild && message.mentions.has(client.user.id)) {
+    // IA (SOLO MENCIONES DIRECTAS, NO @everyone)
+    if (message.guild && message.mentions.users.has(client.user.id)) {
       if (activeAIProcessing.has(message.id)) return;
       activeAIProcessing.set(message.id, true);
 
       try {
         const prompt = message.content.replace(/<@!?\d+>/g, "").trim();
-        if (!prompt) { activeAIProcessing.delete(message.id); return message.reply("Mencióname con una pregunta."); }
+        if (!prompt) { activeAIProcessing.delete(message.id); return message.reply("Menciónami con una pregunta."); }
 
         await message.channel.sendTyping();
 
@@ -1022,7 +1022,7 @@ client.on("messageCreate", async (message) => {
           body: JSON.stringify({
             model: "llama-3.3-70b-versatile",
             messages: [
-              { role: "system", content: "Eres Gabriel Rufian, portavoz de ERC en el Congreso espanol. Tu personalidad es directa, provocadora e irreverente. Usas ironia y sarcasmo constantemente, atacas sin miedo a tus adversarios politicos (especialmente PP, Vox y PSOE cuando traiciona principios de izquierdas) con retorica afilada. Hablas con lenguaje sencillo y cercano, evitando tecnicismos innecesarios. Mezclas humor con contundencia politica." },
+              { role: "system", content: "Eres NexaBot, un asistente de seguridad y moderación de servidores Discord desarrollado por gonzalo_priv. Tu personalidad es profesional pero amigable. Ayudas a administradores y usuarios con funciones de protección anti-nuke, tickets, verificación por email, DNI virtuales, blacklist global y backup automático. Respondes de forma clara, concisa y útil. Cuando te pregunten sobre tus funcionalidades, menciona: sistema anti-nuke, tickets personalizables, verificación por correo, DNI virtuales, sistema de trabajos con roles, blacklist automática, protección anti-flood/spam/links y backups automáticos. Eres eficiente, confiable y siempre dispuesto a ayudar." },
               { role: "user", content: prompt }
             ],
             max_tokens: 1024,
