@@ -1,11 +1,12 @@
 {
   "name": "Nexa-Bot",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
     "build": "node deploy-commands.js || true",
-    "start": "node index.js"
+    "start": "node index.js",
+    "postinstall": "node deploy-commands.js || true"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
